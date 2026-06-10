@@ -85,7 +85,8 @@ function note(el,t,ok){el.className="msg "+(ok?"ok":"err");el.textContent=t;el.s
 let ROLE=null, ME=null, TUSER=null, TPASS=null, TNAME=null;
 let STUDENTS=[], KITS=[], COMPONENTS=[], FRANCHISES=[];
 let TLIST={students:[],components:[]};
-const TABS=[["dash","Dashboard"],["issue","Issue kit"],["loans","Loans"],["parts","Lost / extra"],["students","Students"],["stock","Stock"],["kits","Kits & cost"],["teachers","Teachers"]];
+const COURSES=["ORB 1","ORB 2","ORB 3","ORB 4","ORB 5"];
+const TABS=[["dash","Dashboard"],["issue","Issue kit"],["loans","Loans"],["parts","Lost / extra"],["students","Students"],["required","Required stock"],["stock","Stock"],["kits","Kits & cost"],["teachers","Teachers"]];
 let TAB="dash";
 
 // ---------- auth ----------
@@ -138,6 +139,7 @@ function renderAdmin(){const m=$("main");
   if(TAB==="loans")return renderLoans(m);
   if(TAB==="parts")return renderParts(m);
   if(TAB==="students")return renderStudents(m);
+  if(TAB==="required")return renderRequired(m);
   if(TAB==="stock")return renderStock(m);
   if(TAB==="kits")return renderKits(m);
   if(TAB==="teachers")return renderTeachersAdmin(m);
@@ -176,12 +178,29 @@ async function renderParts(m){const{data:recent}=await sb.from("movements").sele
     <div><label>Note</label><input id="pNote"></div><div style="margin-top:14px;"><button class="btn" onclick="doPart()">Log it</button></div></div>
     <div class="card"><h2>Recent (20)</h2>${recent&&recent.length?tbl(["When","Class","Component","Qty","Type","Teacher"],recent.map(r=>[(r.occurred_at||'').slice(0,16).replace('T',' '),esc(r.class_label||''),`<span class="urn">${esc(r.components?.urn||'')}</span> ${esc(r.components?.name||'')}`,r.qty,r.type,esc(r.staff||'')])):'<p class="muted">None yet.</p>'}</div>`;}
 async function doPart(){const{error}=await sb.from("movements").insert({component_id:+$("pComp").value,qty:+$("pQty").value||1,type:$("pType").value,student_id:+$("pStu").value||null,staff:$("pStaff").value,class_label:$("pClass").value,reason:$("pNote").value});note($("msg"),error?error.message:"Logged.",!error);if(!error)renderAdmin();}
+function courseSel(id,val){return `<select onchange="updateCourse(${id},this.value)"><option value=""${val?'':' selected'}>—</option>${COURSES.map(c=>`<option${c===val?' selected':''}>${c}</option>`).join("")}</select>`;}
 async function renderStudents(m){m.innerHTML=`<h2>Students (${STUDENTS.length})</h2><div class="card"><div class="row">
     <div><label>Name</label><input id="sName"></div><div><label>Franchise</label><select id="sFr">${FRANCHISES.map(f=>`<option value="${f.id}">${esc(f.name)}</option>`).join("")}</select></div>
-    <div><label>Current course</label><input id="sCourse"></div><div><label>Parent contact</label><input id="sContact"></div></div>
+    <div><label>Course</label><select id="sCourse"><option value="">—</option>${COURSES.map(c=>`<option>${c}</option>`).join("")}</select></div>
+    <div><label>Parent contact <span class="muted">(optional)</span></label><input id="sContact"></div></div>
     <div style="margin-top:12px;"><button class="btn" onclick="addStudent()">Add student</button></div></div>
-    <div class="card">${STUDENTS.length?tbl(["Name","Franchise","Course","Contact"],STUDENTS.map(s=>[esc(s.name),esc(s.franchises?.name||''),esc(s.current_course||''),esc(s.parent_contact||'')])):'<p class="muted">No students yet.</p>'}</div>`;}
-async function addStudent(){const{error}=await sb.from("students").insert({name:$("sName").value.trim(),franchise_id:+$("sFr").value,current_course:$("sCourse").value,parent_contact:$("sContact").value});note($("msg"),error?error.message:"Added.",!error);if(!error){await loadRefs();renderAdmin();}}
+    <div class="card">${STUDENTS.length?tbl(["Name","Franchise","Course","Contact",""],STUDENTS.map(s=>[esc(s.name),esc(s.franchises?.name||''),courseSel(s.id,s.current_course),esc(s.parent_contact||''),`<button class="btn pink sm" onclick="deleteStudent(${s.id},'${esc(s.name).replace(/'/g,"")}')">Remove</button>`])):'<p class="muted">No students yet.</p>'}</div>`;}
+async function addStudent(){const n=$("sName").value.trim();if(!n){note($("msg"),"Name required.",false);return;}
+  const{error}=await sb.from("students").insert({name:n,franchise_id:+$("sFr").value,current_course:$("sCourse").value||null,parent_contact:$("sContact").value||null});note($("msg"),error?error.message:"Added.",!error);if(!error){await loadRefs();renderAdmin();}}
+async function updateCourse(id,v){const{error}=await sb.from("students").update({current_course:v||null}).eq("id",id);note($("msg"),error?error.message:"Course updated.",!error);if(!error){await loadRefs();}}
+async function deleteStudent(id,name){if(!confirm("Remove "+name+"? Their kit/log history is kept but unlinked."))return;
+  const{error}=await sb.from("students").delete().eq("id",id);note($("msg"),error?error.message:"Removed.",!error);if(!error){await loadRefs();renderAdmin();}}
+async function renderRequired(m){
+  const{data:req}=await sb.from("v_requirements").select("*").order("urn");
+  const counts=COURSES.map(c=>[c,STUDENTS.filter(s=>s.current_course===c).length]);
+  const short=(req||[]).filter(r=>r.shortfall>0);
+  m.innerHTML=`<h2>Required stock</h2>
+    <p class="muted">Parts needed to equip every current student once (students per course × that course's kit). Shortfall = required minus what's in storage.</p>
+    <div class="stats">${counts.map(([c,n])=>`<div class="stat"><div class="v">${n}</div><div class="l">${c}</div></div>`).join("")}<div class="stat s"><div class="v">${short.length}</div><div class="l">parts short</div></div></div>
+    <div class="card">${(req&&req.length)?tbl(["URN","Component","Group","Required","In storage","Shortfall"],
+      req.map(r=>[`<span class="urn">${r.urn}</span>`,esc(r.name),`<span class="tag">${esc(r.subgroup||'')}</span>`,r.required,r.in_storage,
+        r.shortfall>0?`<b style="color:#922">${r.shortfall}</b>`:'0'])):'<p class="muted">No requirements yet — add students with a course.</p>'}</div>`;
+}
 async function renderStock(m){const{data:stock}=await sb.from("v_stock").select("*").order("urn");
   m.innerHTML=`<h2>Stock by component (${stock.length})</h2><p class="muted">Storage = on shelf · Loan = out · Gone = sold/lost. Edit reorder + cost.</p>
     <div class="card">${tbl(["URN","Component","Group","Storage","Loan","Gone","Reorder","Cost £"],stock.map(r=>[`<span class="urn">${r.urn}</span>`,esc(r.name),`<span class="tag">${esc(r.subgroup||'')}</span>`,r.in_storage,r.on_loan,r.gone,`<input style="width:60px" type="number" value="${r.reorder_level||0}" onchange="setReorder(${r.id},this.value)">`,`<input style="width:70px" type="number" step="0.01" value="${r.unit_cost||0}" onchange="setCost(${r.id},this.value)">`]))}</div>`;}
