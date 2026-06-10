@@ -216,8 +216,7 @@ async function renderStock(m){
     stock.map(r=>[`<span class="urn">${r.urn}</span>`,esc(r.name),`<span class="tag">${esc(r.subgroup||'')}</span>`,
       r.in_storage,r.on_loan,r.gone,
       `<input style="width:60px" type="number" value="${r.reorder_level||0}" onchange="setReorder(${r.id},this.value)">`,
-      `<input style="width:70px" type="number" step="0.01" value="${r.unit_cost||0}" onchange="setCost(${r.id},this.value)">`],
-      r=>r.reorder_level>0&&r.in_storage<=r.reorder_level)}</div>`;
+      `<input style="width:70px" type="number" step="0.01" value="${r.unit_cost||0}" onchange="setCost(${r.id},this.value)">`]))}</div>`;
 }
 async function setReorder(id,v){await sb.from("components").update({reorder_level:+v||0}).eq("id",id);}
 async function setCost(id,v){await sb.from("components").update({unit_cost:+v||0}).eq("id",id);}
@@ -230,7 +229,7 @@ async function renderKits(m){
     kc.map(k=>[esc(k.code),esc(k.name),esc(k.audience),
       Number(k.kit_cost).toFixed(2),
       `<input style="width:80px" type="number" step="0.01" value="${k.buy_price||0}" onchange="setBuy(${k.id},this.value)">`,
-      `<b style="color:${k.buy_margin>=0?'#066':'#922'}">${Number(k.buy_margin).toFixed(2)}</b>`])}</div>`;
+      `<b style="color:${k.buy_margin>=0?'#066':'#922'}">${Number(k.buy_margin).toFixed(2)}</b>`]))}</div>`;
 }
 async function setBuy(id,v){await sb.from("kits").update({buy_price:+v||0}).eq("id",id);if(!isNaN(+v))render();}
 
