@@ -1,0 +1,5 @@
+.env
+*.secret
+*.key
+seed_secret*
+.DS_Store

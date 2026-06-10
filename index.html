@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ROBOCODE · Stock</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--teal:#003439;--turq:#00DCDE;--turq6:#00ADB3;--pink:#FF00BF;--tan:#FE6611;--bg:#EDFFFE;--line:#bfe9e9;--ink:#0a4146;}
+*{box-sizing:border-box;}
+body{margin:0;font-family:-apple-system,'Segoe UI',Inter,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--teal);font-size:14px;}
+header{background:var(--teal);color:#EDFFFE;padding:12px 22px;display:flex;align-items:center;gap:18px;}
+header .brand{font-weight:800;letter-spacing:1px;font-size:17px;}
+header .brand b{color:var(--turq);}
+header .who{margin-left:auto;font-size:12px;color:#83FDFF;}
+header button{background:none;border:1px solid #2c5b60;color:#cdeff0;border-radius:7px;padding:5px 10px;cursor:pointer;font-size:12px;}
+nav{background:#012a2e;padding:0 22px;display:flex;gap:2px;overflow-x:auto;}
+nav a{color:#9fd9d9;padding:11px 14px;cursor:pointer;font-size:13px;font-weight:600;border-bottom:3px solid transparent;white-space:nowrap;}
+nav a.on{color:#fff;border-color:var(--turq);}
+.wrap{max-width:1180px;margin:0 auto;padding:20px 22px 70px;}
+h2{font-size:18px;margin:0 0 14px;}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px;}
+.stats{display:flex;gap:12px;flex-wrap:wrap;}
+.stat{flex:1;min-width:130px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;}
+.stat .v{font-size:26px;font-weight:800;}
+.stat .l{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--turq6);}
+.stat.s .v{color:var(--turq6);} .stat.l2 .v{color:var(--tan);} .stat.g .v{color:var(--pink);}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{background:#f1fbfb;text-align:left;padding:8px 10px;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--turq6);border-bottom:2px solid var(--line);}
+td{padding:7px 10px;border-bottom:1px solid #eef7f7;}
+tr.low td{background:#fff5f0;}
+.urn{font-family:Menlo,Consolas,monospace;font-weight:700;color:var(--turq6);font-size:12px;}
+label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--turq6);font-weight:700;margin:8px 0 3px;}
+input,select{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:14px;color:var(--teal);background:#fff;}
+.row{display:flex;gap:12px;flex-wrap:wrap;} .row>div{flex:1;min-width:150px;}
+.btn{background:var(--turq6);color:#fff;border:none;border-radius:8px;padding:9px 16px;font-weight:700;cursor:pointer;font-size:14px;}
+.btn:hover{background:var(--teal);}
+.btn.pink{background:var(--pink);} .btn.sm{padding:5px 11px;font-size:12px;}
+.btn.ghost{background:#fff;color:var(--teal);border:1px solid var(--line);}
+.pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;color:#fff;}
+.pill.rent{background:var(--tan);} .pill.buy{background:var(--pink);}
+.msg{padding:10px 14px;border-radius:8px;margin-bottom:12px;font-size:13px;display:none;}
+.msg.ok{background:#e4fbf8;color:#066;border:1px solid #9fe6dd;display:block;}
+.msg.err{background:#ffeef0;color:#922;border:1px solid #f5c2c8;display:block;}
+.auth{max-width:360px;margin:8vh auto;}
+.muted{color:#6a8b8b;font-size:12px;}
+.tag{display:inline-block;background:#eef7f7;border-radius:6px;padding:1px 7px;font-size:11px;color:#5a8080;}
+</style></head>
+<body>
+<div id="authView" class="auth" style="display:none;">
+  <div class="card">
+    <div class="brand" style="font-weight:800;font-size:20px;margin-bottom:4px;">ROBO<span style="color:var(--turq6)">CODE</span> · Stock</div>
+    <p class="muted">Sign in to the kit &amp; stock system.</p>
+    <div id="authMsg" class="msg"></div>
+    <label>Email</label><input id="email" type="email" autocomplete="username">
+    <label>Password</label><input id="pass" type="password" autocomplete="current-password">
+    <div style="display:flex;gap:8px;margin-top:14px;">
+      <button class="btn" onclick="signIn()">Sign in</button>
+      <button class="btn ghost" onclick="signUp()">Create account</button>
+    </div>
+  </div>
+</div>
+
+<div id="appView" style="display:none;">
+  <header>
+    <div class="brand">ROBO<b>CODE</b> · Stock</div>
+    <div class="who" id="who"></div>
+    <button onclick="signOut()">Sign out</button>
+  </header>
+  <nav id="nav"></nav>
+  <div class="wrap"><div id="msg" class="msg"></div><div id="main"></div></div>
+</div>
+
+<script>
+const SUPABASE_URL="https://dtggdbcortsnhqepfyem.supabase.co";
+const SUPABASE_ANON="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR0Z2dkYmNvcnRzbmhxZXBmeWVtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwODEzNjQsImV4cCI6MjA5NjY1NzM2NH0.NKSmwz8oiJ7ob5I0R_ZMsPWdv-8anff82Jfp2EEkOTs";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+const $=id=>document.getElementById(id);
+let ME=null, STUDENTS=[], KITS=[], COMPONENTS=[], FRANCHISES=[];
+
+const TABS=[["dash","Dashboard"],["issue","Issue kit"],["loans","Loans"],["parts","Lost / extra"],["students","Students"],["stock","Stock"],["kits","Kits & cost"]];
+let TAB="dash";
+
+function note(el,t,ok){el.className="msg "+(ok?"ok":"err");el.textContent=t;el.style.display="block";if(ok)setTimeout(()=>el.style.display="none",3500);}
+const esc=s=>(s==null?"":String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// ---------- auth ----------
+async function signIn(){const{error}=await sb.auth.signInWithPassword({email:$("email").value.trim(),password:$("pass").value});if(error)note($("authMsg"),error.message,false);}
+async function signUp(){const{error}=await sb.auth.signUp({email:$("email").value.trim(),password:$("pass").value});if(error)note($("authMsg"),error.message,false);else note($("authMsg"),"Account created. If email confirmation is on, confirm then sign in.",true);}
+async function signOut(){await sb.auth.signOut();}
+sb.auth.onAuthStateChange((_e,session)=>{ME=session?.user||null;route();});
+
+async function route(){
+  if(!ME){$("authView").style.display="block";$("appView").style.display="none";return;}
+  $("authView").style.display="none";$("appView").style.display="block";$("who").textContent=ME.email;
+  $("nav").innerHTML=TABS.map(([k,l])=>`<a class="${k===TAB?'on':''}" onclick="go('${k}')">${l}</a>`).join("");
+  await loadRefs(); render();
+}
+function go(t){TAB=t;route();}
+
+async function loadRefs(){
+  const[a,b,c,d]=await Promise.all([
+    sb.from("students").select("*, franchises(name)").order("name"),
+    sb.from("kits").select("*").order("code"),
+    sb.from("components").select("*").order("urn"),
+    sb.from("franchises").select("*").order("name")]);
+  STUDENTS=a.data||[];KITS=b.data||[];COMPONENTS=c.data||[];FRANCHISES=d.data||[];
+}
+
+// ---------- views ----------
+async function render(){
+  const m=$("main");
+  if(TAB==="dash") return renderDash(m);
+  if(TAB==="issue") return renderIssue(m);
+  if(TAB==="loans") return renderLoans(m);
+  if(TAB==="parts") return renderParts(m);
+  if(TAB==="students") return renderStudents(m);
+  if(TAB==="stock") return renderStock(m);
+  if(TAB==="kits") return renderKits(m);
+}
+
+async function renderDash(m){
+  const{data:stock}=await sb.from("v_stock").select("*");
+  const{data:loans}=await sb.from("v_open_loans").select("*");
+  const sumS=stock.reduce((a,r)=>a+r.in_storage,0), sumL=stock.reduce((a,r)=>a+r.on_loan,0), sumG=stock.reduce((a,r)=>a+r.gone,0);
+  const low=stock.filter(r=>r.reorder_level>0 && r.in_storage<=r.reorder_level);
+  m.innerHTML=`<h2>Dashboard</h2>
+  <div class="stats">
+    <div class="stat s"><div class="v">${sumS.toLocaleString()}</div><div class="l">units in storage</div></div>
+    <div class="stat l2"><div class="v">${sumL.toLocaleString()}</div><div class="l">units on loan</div></div>
+    <div class="stat g"><div class="v">${sumG.toLocaleString()}</div><div class="l">units sold / lost</div></div>
+    <div class="stat"><div class="v">${loans.length}</div><div class="l">kits out on loan</div></div>
+  </div>
+  <div class="card"><h2>Low stock (${low.length})</h2>${low.length?tbl(["URN","Component","In storage","Reorder ≤"],low.map(r=>[`<span class="urn">${r.urn}</span>`,esc(r.name),r.in_storage,r.reorder_level])):'<p class="muted">Nothing below its reorder level. Set reorder levels on the Stock tab.</p>'}</div>`;
+}
+
+function studentOpts(){return STUDENTS.map(s=>`<option value="${s.id}">${esc(s.name)}${s.current_course?' · '+esc(s.current_course):''}</option>`).join("");}
+function kitOpts(){return KITS.map(k=>`<option value="${k.id}">${esc(k.code)} · ${esc(k.name)}</option>`).join("");}
+
+async function renderIssue(m){
+  m.innerHTML=`<h2>Issue a kit</h2><div class="card">
+    <div class="row">
+      <div><label>Student</label><select id="iStu">${studentOpts()}</select></div>
+      <div><label>Kit</label><select id="iKit">${kitOpts()}</select></div>
+    </div>
+    <div class="row">
+      <div><label>Type</label><select id="iType"><option value="rent">Rent (free loan, returns)</option><option value="buy">Buy (paid, keeps)</option></select></div>
+      <div><label>Due back (rent)</label><input id="iDue" type="date"></div>
+      <div><label>Price £ (buy)</label><input id="iPrice" type="number" min="0" step="0.01" value="0"></div>
+    </div>
+    <div style="margin-top:14px;"><button class="btn" onclick="doIssue()">Issue kit</button></div>
+    <p class="muted" style="margin-top:10px;">Issuing decrements storage and (for rent) creates a live loan. Add students on the Students tab first.</p>
+  </div>`;
+}
+async function doIssue(){
+  const t=$("iType").value;
+  const args={p_student:+$("iStu").value,p_kit:+$("iKit").value,p_type:t,
+    p_due:$("iDue").value||null,p_price:t==="buy"?(+$("iPrice").value||0):0,p_staff:ME.email};
+  const{error}=await sb.rpc("issue_kit",args);
+  note($("msg"),error?error.message:"Kit issued.",!error);
+}
+
+async function renderLoans(m){
+  const{data:loans}=await sb.from("v_open_loans").select("*").order("issued_at");
+  m.innerHTML=`<h2>Open loans — who holds what (${loans.length})</h2><div class="card">
+  ${loans.length?tbl(["Student","Kit","Franchise","Issued","Due","",""].slice(0,6),
+     loans.map(l=>[esc(l.student),esc(l.kit_name),esc(l.franchise||''),(l.issued_at||'').slice(0,10),l.due_at||'—',
+       `<button class="btn pink sm" onclick="doReturn(${l.id})">Mark returned</button>`])):'<p class="muted">No kits out on loan.</p>'}</div>`;
+}
+async function doReturn(id){const{error}=await sb.rpc("return_issue",{p_issue:id});note($("msg"),error?error.message:"Kit returned to storage.",!error);if(!error)render();}
+
+async function renderParts(m){
+  const{data:recent}=await sb.from("movements").select("*, components(urn,name)").in("type",["replacement","loss"]).order("occurred_at",{ascending:false}).limit(20);
+  m.innerHTML=`<h2>Lost / extra components</h2><div class="card">
+    <div class="row">
+      <div><label>Student</label><select id="pStu">${studentOpts()}</select></div>
+      <div><label>Component</label><select id="pComp">${COMPONENTS.map(c=>`<option value="${c.id}">${esc(c.urn)} · ${esc(c.name)}</option>`).join("")}</select></div>
+      <div><label>Qty</label><input id="pQty" type="number" min="1" value="1"></div>
+    </div>
+    <div class="row">
+      <div><label>Reason</label><select id="pType"><option value="replacement">Replacement / extra (out of stock)</option><option value="loss">Lost from a loan</option></select></div>
+      <div><label>Class / session</label><input id="pClass" placeholder="e.g. Sat AM ORB1"></div>
+      <div><label>Teacher</label><input id="pStaff" value="${esc(ME.email)}"></div>
+    </div>
+    <div><label>Note</label><input id="pNote" placeholder="what happened"></div>
+    <div style="margin-top:14px;"><button class="btn" onclick="doPart()">Log it</button></div>
+  </div>
+  <div class="card"><h2>Recent (20)</h2>${recent&&recent.length?tbl(["When","Student / class","Component","Qty","Type","Teacher"],
+    recent.map(r=>[(r.occurred_at||'').slice(0,16).replace('T',' '),esc(r.class_label||'')+(r.student_id?'':''),
+      `<span class="urn">${esc(r.components?.urn||'')}</span> ${esc(r.components?.name||'')}`,r.qty,r.type,esc(r.staff||'')])):'<p class="muted">None yet.</p>'}</div>`;
+}
+async function doPart(){
+  const{error}=await sb.from("movements").insert({component_id:+$("pComp").value,qty:+$("pQty").value||1,
+    type:$("pType").value,student_id:+$("pStu").value||null,staff:$("pStaff").value,class_label:$("pClass").value,reason:$("pNote").value});
+  note($("msg"),error?error.message:"Logged and stock updated.",!error);if(!error)render();
+}
+
+async function renderStudents(m){
+  m.innerHTML=`<h2>Students (${STUDENTS.length})</h2>
+  <div class="card"><div class="row">
+    <div><label>Name</label><input id="sName"></div>
+    <div><label>Franchise</label><select id="sFr">${FRANCHISES.map(f=>`<option value="${f.id}">${esc(f.name)}</option>`).join("")}</select></div>
+    <div><label>Current course</label><input id="sCourse" placeholder="ORB1 / C1..."></div>
+    <div><label>Parent contact</label><input id="sContact"></div>
+  </div><div style="margin-top:12px;"><button class="btn" onclick="addStudent()">Add student</button></div></div>
+  <div class="card">${STUDENTS.length?tbl(["Name","Franchise","Course","Contact"],
+    STUDENTS.map(s=>[esc(s.name),esc(s.franchises?.name||''),esc(s.current_course||''),esc(s.parent_contact||'')])):'<p class="muted">No students yet.</p>'}</div>`;
+}
+async function addStudent(){
+  const{error}=await sb.from("students").insert({name:$("sName").value.trim(),franchise_id:+$("sFr").value,current_course:$("sCourse").value,parent_contact:$("sContact").value});
+  note($("msg"),error?error.message:"Student added.",!error);if(!error){await loadRefs();render();}
+}
+
+async function renderStock(m){
+  const{data:stock}=await sb.from("v_stock").select("*").order("urn");
+  m.innerHTML=`<h2>Stock by component (${stock.length})</h2>
+  <p class="muted">Storage = on shelf · Loan = out on rent · Gone = sold/lost. Edit reorder levels to drive low-stock alerts.</p>
+  <div class="card">${tbl(["URN","Component","Group","Storage","Loan","Gone","Reorder","Cost £"],
+    stock.map(r=>[`<span class="urn">${r.urn}</span>`,esc(r.name),`<span class="tag">${esc(r.subgroup||'')}</span>`,
+      r.in_storage,r.on_loan,r.gone,
+      `<input style="width:60px" type="number" value="${r.reorder_level||0}" onchange="setReorder(${r.id},this.value)">`,
+      `<input style="width:70px" type="number" step="0.01" value="${r.unit_cost||0}" onchange="setCost(${r.id},this.value)">`],
+      r=>r.reorder_level>0&&r.in_storage<=r.reorder_level)}</div>`;
+}
+async function setReorder(id,v){await sb.from("components").update({reorder_level:+v||0}).eq("id",id);}
+async function setCost(id,v){await sb.from("components").update({unit_cost:+v||0}).eq("id",id);}
+
+async function renderKits(m){
+  const{data:kc}=await sb.from("v_kit_cost").select("*").order("code");
+  m.innerHTML=`<h2>Kits &amp; course cost</h2>
+  <p class="muted">Kit cost is the sum of component costs (fill costs on the Stock tab). Set the buy price to see margin.</p>
+  <div class="card">${tbl(["Code","Kit","Audience","Kit cost £","Buy price £","Margin £"],
+    kc.map(k=>[esc(k.code),esc(k.name),esc(k.audience),
+      Number(k.kit_cost).toFixed(2),
+      `<input style="width:80px" type="number" step="0.01" value="${k.buy_price||0}" onchange="setBuy(${k.id},this.value)">`,
+      `<b style="color:${k.buy_margin>=0?'#066':'#922'}">${Number(k.buy_margin).toFixed(2)}</b>`])}</div>`;
+}
+async function setBuy(id,v){await sb.from("kits").update({buy_price:+v||0}).eq("id",id);if(!isNaN(+v))render();}
+
+function tbl(cols,rows,lowFn){
+  return `<table><thead><tr>${cols.map(c=>`<th>${c}</th>`).join("")}</tr></thead><tbody>`+
+    rows.map((r,i)=>`<tr class="${lowFn&&lowFn(r._raw||r)?'low':''}">${r.map(c=>`<td>${c}</td>`).join("")}</tr>`).join("")+
+    `</tbody></table>`;
+}
+
+// init
+(async()=>{const{data}=await sb.auth.getSession();ME=data.session?.user||null;route();})();
+</script>
+</body></html>
