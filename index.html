@@ -192,12 +192,20 @@ async function renderKits(m){const{data:kc}=await sb.from("v_kit_cost").select("
     <div class="card">${tbl(["Code","Kit","Audience","Kit cost £","Buy price £","Margin £"],kc.map(k=>[esc(k.code),esc(k.name),esc(k.audience),Number(k.kit_cost).toFixed(2),`<input style="width:80px" type="number" step="0.01" value="${k.buy_price||0}" onchange="setBuy(${k.id},this.value)">`,`<b style="color:${k.buy_margin>=0?'#066':'#922'}">${Number(k.buy_margin).toFixed(2)}</b>`]))}</div>`;}
 async function setBuy(id,v){await sb.from("kits").update({buy_price:+v||0}).eq("id",id);if(!isNaN(+v))renderAdmin();}
 
+let TEACHERS=[];
 async function renderTeachersAdmin(m){
   const{data:ts}=await sb.from("teachers").select("username,name,active,created_at").order("username");
+  TEACHERS=ts||[];
+  const rows=TEACHERS.map(t=>{const u=t.username;
+    const acts=`<button class="btn ghost sm" onclick="renameTeacher('${u}')">Rename</button> `+
+      `<button class="btn ghost sm" onclick="resetTeacherPw('${u}')">Reset PW</button> `+
+      `<button class="btn ghost sm" onclick="toggleTeacher('${u}')">${t.active?'Disable':'Enable'}</button> `+
+      `<button class="btn pink sm" onclick="deleteTeacher('${u}')">Delete</button>`;
+    return [`<span class="urn">${esc(u)}</span>`,esc(t.name||''),t.active?'yes':'no',(t.created_at||'').slice(0,10),acts];});
   m.innerHTML=`<h2>Teacher accounts</h2><p class="muted">Create logins for teachers. No email needed. They can only log component takings.</p>
     <div class="card"><div class="row"><div><label>Username</label><input id="tnU"></div><div><label>Name</label><input id="tnN"></div><div><label>Password</label><input id="tnP" type="text"></div></div>
     <div style="margin-top:12px;"><button class="btn" onclick="addTeacher()">Create teacher</button></div></div>
-    <div class="card">${ts&&ts.length?tbl(["Username","Name","Active","Created"],ts.map(t=>[`<span class="urn">${esc(t.username)}</span>`,esc(t.name||''),t.active?'yes':'no',(t.created_at||'').slice(0,10)])):'<p class="muted">No teachers yet.</p>'}</div>`;
+    <div class="card">${TEACHERS.length?tbl(["Username","Name","Active","Created",""],rows):'<p class="muted">No teachers yet.</p>'}</div>`;
 }
 async function addTeacher(){
   const u=$("tnU").value.trim(),p=$("tnP").value,n=$("tnN").value.trim();
@@ -205,6 +213,15 @@ async function addTeacher(){
   const{error}=await sb.rpc("create_teacher",{p_user:u,p_pass:p,p_name:n});
   note($("msg"),error?error.message:"Teacher created.",!error);if(!error)renderAdmin();
 }
+function teacherName(u){const t=TEACHERS.find(x=>x.username===u);return t?(t.name||""):"";}
+async function renameTeacher(u){const n=prompt("Name for "+u+":",teacherName(u));if(n===null)return;
+  const{error}=await sb.from("teachers").update({name:n}).eq("username",u);note($("msg"),error?error.message:"Renamed.",!error);if(!error)renderAdmin();}
+async function resetTeacherPw(u){const p=prompt("New password for "+u+":");if(!p)return;
+  const{error}=await sb.rpc("admin_set_teacher_password",{p_user:u,p_newpass:p});note($("msg"),error?error.message:"Password reset.",!error);}
+async function toggleTeacher(u){const t=TEACHERS.find(x=>x.username===u);
+  const{error}=await sb.from("teachers").update({active:!t.active}).eq("username",u);note($("msg"),error?error.message:"Updated.",!error);if(!error)renderAdmin();}
+async function deleteTeacher(u){if(!confirm("Delete teacher "+u+"? Their past log entries stay."))return;
+  const{error}=await sb.from("teachers").delete().eq("username",u);note($("msg"),error?error.message:"Deleted.",!error);if(!error)renderAdmin();}
 
 // ---------- teacher view ----------
 async function renderTeacher(){
@@ -224,12 +241,23 @@ async function drawTeacher(){
       <label>Note (optional)</label><input id="lNote">
       <div style="margin-top:14px;"><button class="btn" onclick="doTeacherLog()">Log it</button></div>
     </div>
-    <div class="card"><h2>My recent log</h2>${recent&&recent.length?tbl(["When","Student","Component","Qty","Type"],recent.map(r=>[(r.occurred_at||'').slice(0,16).replace('T',' '),esc(r.student||''),`<span class="urn">${esc(r.urn||'')}</span> ${esc(r.component||'')}`,r.qty,r.type])):'<p class="muted">Nothing logged yet.</p>'}</div></div>`;
+    <div class="card"><h2>My recent log</h2>${recent&&recent.length?tbl(["When","Student","Component","Qty","Type"],recent.map(r=>[(r.occurred_at||'').slice(0,16).replace('T',' '),esc(r.student||''),`<span class="urn">${esc(r.urn||'')}</span> ${esc(r.component||'')}`,r.qty,r.type])):'<p class="muted">Nothing logged yet.</p>'}</div>
+    <div class="card"><h2>Change my password</h2>
+      <div class="row"><div><label>Current password</label><input id="cpOld" type="password"></div><div><label>New password</label><input id="cpNew" type="password"></div></div>
+      <div style="margin-top:12px;"><button class="btn ghost" onclick="doChangePw()">Update password</button></div></div></div>`;
 }
 async function doTeacherLog(){
   const{error}=await sb.rpc("teacher_log",{p_user:TUSER,p_pass:TPASS,p_student:+$("lStu").value||null,p_component:+$("lComp").value,p_qty:+$("lQty").value||1,p_type:$("lType").value,p_class:$("lClass").value,p_reason:$("lNote").value});
   note($("msg"),error?error.message:"Logged. Thank you.",!error);
   if(!error)drawTeacher();
+}
+async function doChangePw(){
+  const o=$("cpOld").value,n=$("cpNew").value;
+  if(!o||!n){note($("msg"),"Fill both password fields.",false);return;}
+  const{error}=await sb.rpc("teacher_change_password",{p_user:TUSER,p_oldpass:o,p_newpass:n});
+  if(error){note($("msg"),error.message,false);return;}
+  TPASS=n;sessionStorage.setItem("t_pass",n);
+  note($("msg"),"Password updated.",true);drawTeacher();
 }
 
 // ---------- init ----------
