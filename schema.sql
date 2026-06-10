@@ -173,5 +173,5 @@ create policy staff_all on students   for all to authenticated using (true) with
 create policy staff_all on issues     for all to authenticated using (true) with check (true);
 create policy staff_all on movements  for all to authenticated using (true) with check (true);
 
--- seed franchises (Shirley first)
-insert into franchises(name) values ('Shirley'), ('Leicester');
+-- seed franchise (Shirley only)
+insert into franchises(name) values ('Shirley');

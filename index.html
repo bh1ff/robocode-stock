@@ -169,7 +169,7 @@ async function doIssue(){const t=$("iType").value;
   const{error}=await sb.rpc("issue_kit",{p_student:+$("iStu").value,p_kit:+$("iKit").value,p_type:t,p_due:$("iDue").value||null,p_price:t==="buy"?(+$("iPrice").value||0):0,p_staff:ME.email});
   note($("msg"),error?error.message:"Kit issued.",!error);}
 async function renderLoans(m){const{data:loans}=await sb.from("v_open_loans").select("*").order("issued_at");
-  m.innerHTML=`<h2>Open loans (${loans.length})</h2><div class="card">${loans.length?tbl(["Student","Kit","Franchise","Issued","Due",""],loans.map(l=>[esc(l.student),esc(l.kit_name),esc(l.franchise||''),(l.issued_at||'').slice(0,10),l.due_at||'—',`<button class="btn pink sm" onclick="doReturn(${l.id})">Mark returned</button>`])):'<p class="muted">No kits out on loan.</p>'}</div>`;}
+  m.innerHTML=`<h2>Open loans (${loans.length})</h2><div class="card">${loans.length?tbl(["Student","Kit","Issued","Due",""],loans.map(l=>[esc(l.student),esc(l.kit_name),(l.issued_at||'').slice(0,10),l.due_at||'—',`<button class="btn pink sm" onclick="doReturn(${l.id})">Mark returned</button>`])):'<p class="muted">No kits out on loan.</p>'}</div>`;}
 async function doReturn(id){const{error}=await sb.rpc("return_issue",{p_issue:id});note($("msg"),error?error.message:"Returned to storage.",!error);if(!error)renderAdmin();}
 async function renderParts(m){const{data:recent}=await sb.from("movements").select("*, components(urn,name)").in("type",["replacement","loss"]).order("occurred_at",{ascending:false}).limit(20);
   m.innerHTML=`<h2>Lost / extra components</h2><div class="card">
@@ -180,13 +180,13 @@ async function renderParts(m){const{data:recent}=await sb.from("movements").sele
 async function doPart(){const{error}=await sb.from("movements").insert({component_id:+$("pComp").value,qty:+$("pQty").value||1,type:$("pType").value,student_id:+$("pStu").value||null,staff:$("pStaff").value,class_label:$("pClass").value,reason:$("pNote").value});note($("msg"),error?error.message:"Logged.",!error);if(!error)renderAdmin();}
 function courseSel(id,val){return `<select onchange="updateCourse(${id},this.value)"><option value=""${val?'':' selected'}>—</option>${COURSES.map(c=>`<option${c===val?' selected':''}>${c}</option>`).join("")}</select>`;}
 async function renderStudents(m){m.innerHTML=`<h2>Students (${STUDENTS.length})</h2><div class="card"><div class="row">
-    <div><label>Name</label><input id="sName"></div><div><label>Franchise</label><select id="sFr">${FRANCHISES.map(f=>`<option value="${f.id}">${esc(f.name)}</option>`).join("")}</select></div>
+    <div><label>Name</label><input id="sName"></div>
     <div><label>Course</label><select id="sCourse"><option value="">—</option>${COURSES.map(c=>`<option>${c}</option>`).join("")}</select></div>
     <div><label>Parent contact <span class="muted">(optional)</span></label><input id="sContact"></div></div>
     <div style="margin-top:12px;"><button class="btn" onclick="addStudent()">Add student</button></div></div>
-    <div class="card">${STUDENTS.length?tbl(["Name","Franchise","Course","Contact",""],STUDENTS.map(s=>[esc(s.name),esc(s.franchises?.name||''),courseSel(s.id,s.current_course),esc(s.parent_contact||''),`<button class="btn pink sm" onclick="deleteStudent(${s.id},'${esc(s.name).replace(/'/g,"")}')">Remove</button>`])):'<p class="muted">No students yet.</p>'}</div>`;}
+    <div class="card">${STUDENTS.length?tbl(["Name","Course","Contact",""],STUDENTS.map(s=>[esc(s.name),courseSel(s.id,s.current_course),esc(s.parent_contact||''),`<button class="btn pink sm" onclick="deleteStudent(${s.id},'${esc(s.name).replace(/'/g,"")}')">Remove</button>`])):'<p class="muted">No students yet.</p>'}</div>`;}
 async function addStudent(){const n=$("sName").value.trim();if(!n){note($("msg"),"Name required.",false);return;}
-  const{error}=await sb.from("students").insert({name:n,franchise_id:+$("sFr").value,current_course:$("sCourse").value||null,parent_contact:$("sContact").value||null});note($("msg"),error?error.message:"Added.",!error);if(!error){await loadRefs();renderAdmin();}}
+  const{error}=await sb.from("students").insert({name:n,franchise_id:FRANCHISES[0]?.id||null,current_course:$("sCourse").value||null,parent_contact:$("sContact").value||null});note($("msg"),error?error.message:"Added.",!error);if(!error){await loadRefs();renderAdmin();}}
 async function updateCourse(id,v){const{error}=await sb.from("students").update({current_course:v||null}).eq("id",id);note($("msg"),error?error.message:"Course updated.",!error);if(!error){await loadRefs();}}
 async function deleteStudent(id,name){if(!confirm("Remove "+name+"? Their kit/log history is kept but unlinked."))return;
   const{error}=await sb.from("students").delete().eq("id",id);note($("msg"),error?error.message:"Removed.",!error);if(!error){await loadRefs();renderAdmin();}}
