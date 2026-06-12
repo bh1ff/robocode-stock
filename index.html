@@ -86,7 +86,7 @@ let ROLE=null, ME=null, TUSER=null, TPASS=null, TNAME=null;
 let STUDENTS=[], KITS=[], COMPONENTS=[], FRANCHISES=[];
 let TLIST={students:[],components:[]};
 const COURSES=["ORB 1","ORB 2","ORB 3","ORB 4","ORB 5"];
-const TABS=[["dash","Dashboard"],["issue","Issue kit"],["loans","Loans"],["parts","Lost / extra"],["students","Students"],["required","Required stock"],["stock","Stock"],["kits","Kits & cost"],["teachers","Teachers"]];
+const TABS=[["dash","Dashboard"],["issue","Issue kit"],["loans","Loans"],["parts","Lost / extra"],["students","Students"],["required","Required stock"],["stock","Stock"],["invoice","Invoice → stock"],["kits","Kits & cost"],["teachers","Teachers"]];
 let TAB="dash";
 
 // ---------- auth ----------
@@ -141,6 +141,7 @@ function renderAdmin(){const m=$("main");
   if(TAB==="students")return renderStudents(m);
   if(TAB==="required")return renderRequired(m);
   if(TAB==="stock")return renderStock(m);
+  if(TAB==="invoice")return renderInvoice(m);
   if(TAB==="kits")return renderKits(m);
   if(TAB==="teachers")return renderTeachersAdmin(m);
 }
@@ -205,10 +206,55 @@ async function renderRequired(m){
 }
 async function setBuffer(id,v){const{error}=await sb.from("components").update({buffer:+v||0}).eq("id",id);note($("msg"),error?error.message:"Buffer updated.",!error);if(!error)renderAdmin();}
 async function renderStock(m){const{data:stock}=await sb.from("v_stock").select("*").order("urn");
-  m.innerHTML=`<h2>Stock by component (${stock.length})</h2><p class="muted">Storage = on shelf · Loan = out · Gone = sold/lost. Edit reorder + cost.</p>
+  m.innerHTML=`<h2>Stock by component (${stock.length})</h2>
+    <div class="card"><h2>Receive stock (record a purchase)</h2>
+      <div class="row"><div><label>Component</label><select id="rsComp">${compOpts()}</select></div><div><label>Qty received</label><input id="rsQty" type="number" min="1" value="1"></div><div><label>Note</label><input id="rsNote" placeholder="supplier / invoice"></div></div>
+      <div style="margin-top:12px;"><button class="btn" onclick="receiveStock()">Add to storage</button></div></div>
+    <p class="muted">Storage = on shelf · Loan = out · Gone = sold/lost. Edit reorder + cost inline.</p>
     <div class="card">${tbl(["URN","Component","Group","Storage","Loan","Gone","Reorder","Cost £"],stock.map(r=>[`<span class="urn">${r.urn}</span>`,esc(r.name),`<span class="tag">${esc(r.subgroup||'')}</span>`,r.in_storage,r.on_loan,r.gone,`<input style="width:60px" type="number" value="${r.reorder_level||0}" onchange="setReorder(${r.id},this.value)">`,`<input style="width:70px" type="number" step="0.01" value="${r.unit_cost||0}" onchange="setCost(${r.id},this.value)">`]))}</div>`;}
+async function receiveStock(){const{error}=await sb.from("movements").insert({component_id:+$("rsComp").value,qty:+$("rsQty").value||1,type:"purchase_in",reason:$("rsNote").value||"received"});note($("msg"),error?error.message:"Stock added to storage.",!error);if(!error)renderAdmin();}
 async function setReorder(id,v){await sb.from("components").update({reorder_level:+v||0}).eq("id",id);}
 async function setCost(id,v){await sb.from("components").update({unit_cost:+v||0}).eq("id",id);}
+
+// ---------- invoice -> AI ----------
+let INVITEMS=[];
+function renderInvoice(m){m.innerHTML=`<h2>Invoice → stock (AI)</h2>
+  <p class="muted">Upload a supplier invoice or photo. Claude reads it and suggests stock to add; you edit amounts, then confirm. Your API key stays server-side.</p>
+  <div class="card"><div class="row"><div><label>Invoice (PDF or image)</label><input id="invFile" type="file" accept="image/*,application/pdf"></div><div><label>PIN</label><input id="invPin" type="password"></div></div>
+    <div style="margin-top:12px;"><button class="btn" onclick="analyseInvoice()">Analyse</button></div></div>
+  <div id="invResult"></div>`;}
+function fileB64(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result).split(",")[1]);r.onerror=rej;r.readAsDataURL(f);});}
+async function analyseInvoice(){
+  const f=$("invFile").files[0];if(!f){note($("msg"),"Pick a file first.",false);return;}
+  $("invResult").innerHTML='<div class="card"><p class="muted">Analysing… a few seconds.</p></div>';
+  const b64=await fileB64(f);
+  const{data,error}=await sb.functions.invoke("invoice",{body:{file_base64:b64,media_type:f.type,pin:$("invPin").value,catalog:COMPONENTS.map(c=>({urn:c.urn,name:c.name}))}});
+  if(error||(data&&data.error)){$("invResult").innerHTML=`<div class="card"><p style="color:#922">${esc((data&&data.error)||error.message||"Function error")}</p><p class="muted">If this says the function isn't found, deploy the edge function first (see SETUP-AI.md).</p></div>`;return;}
+  INVITEMS=(data.items||[]).map(it=>({urn:it.urn||"",name:it.name||"",qty:+it.qty||1,unit_price:(it.unit_price==null?"":it.unit_price),raw:it.raw||"",include:!!it.urn}));
+  drawInvoice();
+}
+function invMatch(i,urn){return `<select onchange="invSet(${i},'urn',this.value)"><option value="">— not in catalogue —</option>${COMPONENTS.map(c=>`<option value="${c.urn}"${c.urn===urn?' selected':''}>${esc(c.urn)} · ${esc(c.name)}</option>`).join("")}</select>`;}
+function invSet(i,k,v){INVITEMS[i][k]=(k==='include')?v:(k==='qty'?+v:v);}
+function drawInvoice(){
+  const rows=INVITEMS.map((it,i)=>`<tr>
+    <td><input type="checkbox" ${it.include?'checked':''} onchange="invSet(${i},'include',this.checked)"></td>
+    <td>${invMatch(i,it.urn)}</td>
+    <td><input style="width:70px" type="number" min="0" value="${it.qty}" onchange="invSet(${i},'qty',this.value)"></td>
+    <td><input style="width:80px" type="number" step="0.01" value="${it.unit_price}" onchange="invSet(${i},'unit_price',this.value===''?'':+this.value)"></td>
+    <td class="muted">${esc(it.raw)}</td></tr>`).join("");
+  $("invResult").innerHTML=`<div class="card"><h2>Suggested stock (${INVITEMS.length})</h2>
+    <table><thead><tr><th>Add</th><th>Component</th><th>Qty</th><th>Unit £</th><th>From invoice</th></tr></thead><tbody>${rows}</tbody></table>
+    <div style="margin-top:14px;display:flex;gap:8px;"><button class="btn" onclick="confirmInvoice()">Confirm &amp; add to stock</button><button class="btn ghost" onclick="document.getElementById('invResult').innerHTML='';">Cancel</button></div></div>`;
+}
+async function confirmInvoice(){
+  const picks=INVITEMS.filter(it=>it.include&&it.urn&&it.qty>0);
+  if(!picks.length){note($("msg"),"Nothing selected with a matched component.",false);return;}
+  let ok=0;
+  for(const it of picks){const comp=COMPONENTS.find(c=>c.urn===it.urn);if(!comp)continue;
+    const{error}=await sb.from("movements").insert({component_id:comp.id,qty:it.qty,type:"purchase_in",reason:"invoice"});
+    if(!error){ok++;if(it.unit_price!==""&&it.unit_price!=null)await sb.from("components").update({unit_cost:it.unit_price}).eq("id",comp.id);}}
+  note($("msg"),`Added ${ok} item(s) to stock.`,true);document.getElementById("invResult").innerHTML="";await loadRefs();renderAdmin();
+}
 async function renderKits(m){const{data:kc}=await sb.from("v_kit_cost").select("*").order("code");
   m.innerHTML=`<h2>Kits &amp; course cost</h2><p class="muted">Kit cost = sum of component costs. Set buy price for margin.</p>
     <div class="card">${tbl(["Code","Kit","Audience","Kit cost £","Buy price £","Margin £"],kc.map(k=>[esc(k.code),esc(k.name),esc(k.audience),Number(k.kit_cost).toFixed(2),`<input style="width:80px" type="number" step="0.01" value="${k.buy_price||0}" onchange="setBuy(${k.id},this.value)">`,`<b style="color:${k.buy_margin>=0?'#066':'#922'}">${Number(k.buy_margin).toFixed(2)}</b>`]))}</div>`;}
