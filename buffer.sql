@@ -4,7 +4,8 @@
 
 alter table components add column if not exists buffer int default 0;
 
-create or replace view v_requirements as
+drop view if exists v_requirements;
+create view v_requirements as
 select r.id, r.urn, r.name, r.subgroup, r.required,
   coalesce(c.buffer,0)                                            as buffer,
   (r.required + coalesce(c.buffer,0))                            as target,
