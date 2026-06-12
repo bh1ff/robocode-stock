@@ -211,7 +211,15 @@ async function renderStock(m){const{data:stock}=await sb.from("v_stock").select(
       <div class="row"><div><label>Component</label><select id="rsComp">${compOpts()}</select></div><div><label>Qty received</label><input id="rsQty" type="number" min="1" value="1"></div><div><label>Note</label><input id="rsNote" placeholder="supplier / invoice"></div></div>
       <div style="margin-top:12px;"><button class="btn" onclick="receiveStock()">Add to storage</button></div></div>
     <p class="muted">Storage = on shelf · Loan = out · Gone = sold/lost. Edit reorder + cost inline.</p>
-    <div class="card">${tbl(["URN","Component","Group","Storage","Loan","Gone","Reorder","Cost £"],stock.map(r=>[`<span class="urn">${r.urn}</span>`,esc(r.name),`<span class="tag">${esc(r.subgroup||'')}</span>`,r.in_storage,r.on_loan,r.gone,`<input style="width:60px" type="number" value="${r.reorder_level||0}" onchange="setReorder(${r.id},this.value)">`,`<input style="width:70px" type="number" step="0.01" value="${r.unit_cost||0}" onchange="setCost(${r.id},this.value)">`]))}</div>`;}
+    <p class="muted" style="margin-top:-4px;">Storage is editable for stocktake corrections (asks to confirm). Day-to-day, use Receive stock above.</p>
+    <div class="card">${tbl(["URN","Component","Group","Storage","Loan","Gone","Reorder","Cost £"],stock.map(r=>[`<span class="urn">${r.urn}</span>`,esc(r.name),`<span class="tag">${esc(r.subgroup||'')}</span>`,`<input style="width:62px;font-weight:700" type="number" value="${r.in_storage}" onchange="adjustStorage(${r.id},${r.in_storage},this.value,'${esc(r.name).replace(/'/g,"")}')">`,r.on_loan,r.gone,`<input style="width:60px" type="number" value="${r.reorder_level||0}" onchange="setReorder(${r.id},this.value)">`,`<input style="width:70px" type="number" step="0.01" value="${r.unit_cost||0}" onchange="setCost(${r.id},this.value)">`]))}</div>`;}
+async function adjustStorage(id,cur,val,name){
+  const nv=Math.round(+val);
+  if(isNaN(nv)||nv===cur){renderAdmin();return;}
+  if(!confirm("Set storage for "+name+" to "+nv+"?  (currently "+cur+")")){renderAdmin();return;}
+  const{error}=await sb.from("movements").insert({component_id:id,qty:nv-cur,type:"adjustment",reason:"manual stocktake adjustment"});
+  note($("msg"),error?error.message:"Storage set to "+nv+".",!error);renderAdmin();
+}
 async function receiveStock(){const{error}=await sb.from("movements").insert({component_id:+$("rsComp").value,qty:+$("rsQty").value||1,type:"purchase_in",reason:$("rsNote").value||"received"});note($("msg"),error?error.message:"Stock added to storage.",!error);if(!error)renderAdmin();}
 async function setReorder(id,v){await sb.from("components").update({reorder_level:+v||0}).eq("id",id);}
 async function setCost(id,v){await sb.from("components").update({unit_cost:+v||0}).eq("id",id);}
