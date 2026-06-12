@@ -236,7 +236,7 @@ async function analyseInvoice(){
   const f=$("invFile").files[0];if(!f){note($("msg"),"Pick a file first.",false);return;}
   $("invResult").innerHTML='<div class="card"><p class="muted">Analysing… a few seconds.</p></div>';
   const b64=await fileB64(f);
-  const{data,error}=await sb.functions.invoke("invoice",{body:{file_base64:b64,media_type:f.type,pin:$("invPin").value,catalog:COMPONENTS.map(c=>({urn:c.urn,name:c.name}))}});
+  const{data,error}=await sb.functions.invoke("hyper-processor",{body:{file_base64:b64,media_type:f.type,pin:$("invPin").value,catalog:COMPONENTS.map(c=>({urn:c.urn,name:c.name}))}});
   if(error||(data&&data.error)){$("invResult").innerHTML=`<div class="card"><p style="color:#922">${esc((data&&data.error)||error.message||"Function error")}</p><p class="muted">If this says the function isn't found, deploy the edge function first (see SETUP-AI.md).</p></div>`;return;}
   INVITEMS=(data.items||[]).map(it=>({urn:it.urn||"",name:it.name||"",qty:+it.qty||1,unit_price:(it.unit_price==null?"":it.unit_price),raw:it.raw||"",include:!!it.urn}));
   drawInvoice();
