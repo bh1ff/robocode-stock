@@ -195,12 +195,15 @@ async function renderRequired(m){
   const counts=COURSES.map(c=>[c,STUDENTS.filter(s=>s.current_course===c).length]);
   const short=(req||[]).filter(r=>r.shortfall>0);
   m.innerHTML=`<h2>Required stock</h2>
-    <p class="muted">Parts needed to equip every current student once (students per course × that course's kit). Shortfall = required minus what's in storage.</p>
+    <p class="muted">Required = students per course × that course's kit. Buffer = reserved extra you keep for heavy-use parts (e.g. Arduinos). Target = required + buffer. Shortfall = target − in storage.</p>
     <div class="stats">${counts.map(([c,n])=>`<div class="stat"><div class="v">${n}</div><div class="l">${c}</div></div>`).join("")}<div class="stat s"><div class="v">${short.length}</div><div class="l">parts short</div></div></div>
-    <div class="card">${(req&&req.length)?tbl(["URN","Component","Group","Required","In storage","Shortfall"],
-      req.map(r=>[`<span class="urn">${r.urn}</span>`,esc(r.name),`<span class="tag">${esc(r.subgroup||'')}</span>`,r.required,r.in_storage,
+    <div class="card">${(req&&req.length)?tbl(["URN","Component","Required","Buffer","Target","In storage","Shortfall"],
+      req.map(r=>[`<span class="urn">${r.urn}</span>`,esc(r.name),r.required,
+        `<input style="width:60px" type="number" min="0" value="${r.buffer||0}" onchange="setBuffer(${r.id},this.value)">`,
+        r.target,r.in_storage,
         r.shortfall>0?`<b style="color:#922">${r.shortfall}</b>`:'0'])):'<p class="muted">No requirements yet — add students with a course.</p>'}</div>`;
 }
+async function setBuffer(id,v){const{error}=await sb.from("components").update({buffer:+v||0}).eq("id",id);note($("msg"),error?error.message:"Buffer updated.",!error);if(!error)renderAdmin();}
 async function renderStock(m){const{data:stock}=await sb.from("v_stock").select("*").order("urn");
   m.innerHTML=`<h2>Stock by component (${stock.length})</h2><p class="muted">Storage = on shelf · Loan = out · Gone = sold/lost. Edit reorder + cost.</p>
     <div class="card">${tbl(["URN","Component","Group","Storage","Loan","Gone","Reorder","Cost £"],stock.map(r=>[`<span class="urn">${r.urn}</span>`,esc(r.name),`<span class="tag">${esc(r.subgroup||'')}</span>`,r.in_storage,r.on_loan,r.gone,`<input style="width:60px" type="number" value="${r.reorder_level||0}" onchange="setReorder(${r.id},this.value)">`,`<input style="width:70px" type="number" step="0.01" value="${r.unit_cost||0}" onchange="setCost(${r.id},this.value)">`]))}</div>`;}
