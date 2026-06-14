@@ -35,6 +35,8 @@ input,select{width:100%;border:1px solid var(--line);border-radius:8px;padding:8
 .btn:hover{background:var(--teal);} .btn.pink{background:var(--pink);} .btn.sm{padding:5px 11px;font-size:12px;} .btn.ghost{background:#fff;color:var(--teal);border:1px solid var(--line);}
 .pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;color:#fff;}
 .msg{padding:10px 14px;border-radius:8px;margin-bottom:12px;font-size:13px;display:none;}
+.taskbar{display:flex;align-items:center;gap:12px;background:#FFFBEA;border:2.5px solid #FFC400;border-radius:11px;padding:13px 16px;margin:14px 0 16px;font-size:15px;font-weight:600;color:#003439;line-height:1.35;}
+.taskbar b{flex:0 0 auto;font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#8a6d00;background:#FFE07A;border:1px solid #FFC400;border-radius:7px;padding:3px 9px;}
 .msg.ok{background:#e4fbf8;color:#066;border:1px solid #9fe6dd;display:block;}
 .msg.err{background:#ffeef0;color:#922;border:1px solid #f5c2c8;display:block;}
 .auth{max-width:380px;margin:7vh auto;}
@@ -71,7 +73,7 @@ input,select{width:100%;border:1px solid var(--line);border-radius:8px;padding:8
     <button onclick="signOut()">Sign out</button>
   </header>
   <nav id="nav"></nav>
-  <div class="wrap"><div id="msg" class="msg"></div><div id="main"></div></div>
+  <div class="wrap"><div id="msg" class="msg"></div><div id="task" class="taskbar" style="display:none"></div><div id="main"></div></div>
 </div>
 
 <script>
@@ -88,6 +90,21 @@ let TLIST={students:[],components:[]};
 const COURSES=["ORB 1","ORB 2","ORB 3","ORB 4","ORB 5"];
 const TABS=[["dash","Dashboard"],["issue","Issue kit"],["loans","Loans"],["parts","Lost / extra"],["students","Students"],["required","Required stock"],["stock","Stock"],["invoice","Invoice → stock"],["kits","Kits & cost"],["teachers","Teachers"]];
 let TAB="dash";
+
+const TASKTEXT={
+  dash:"Check stock health: low-stock parts to reorder, and how many kits are out on loan.",
+  issue:"Hand a kit to a student. Pick the student and kit, choose Rent (free loan) or Buy, then Issue.",
+  loans:"Kits currently out on loan. When one comes back, hit Mark returned to put it back in storage.",
+  parts:"Log a component a student lost or took as an extra. Logging it lowers the stock count.",
+  students:"Add, edit or remove students. Set each student's current course from the dropdown.",
+  required:"What you need in stock for your pupils. The red Shortfall column is what to order.",
+  stock:"Receive new stock at the top, or click a Storage number to correct it after a stocktake.",
+  invoice:"Upload a supplier invoice. The AI reads it and suggests stock to add. Edit, then Confirm.",
+  kits:"Kit costs and prices. Set the planned quantity (younger) and the buy price for each kit.",
+  teachers:"Create teacher logins (username + password). Rename, reset password, disable or delete here."
+};
+const TEACHER_TASK="Log a component a child took or lost: pick the child and the part, set the quantity, then Log it.";
+function setTask(t){const e=$("task");if(t){e.innerHTML=`<b>Task</b><span>${t}</span>`;e.style.display="flex";}else{e.style.display="none";}}
 
 // ---------- auth ----------
 function authMode(m){const t=m==="teacher";$("segT").classList.toggle("on",t);$("segA").classList.toggle("on",!t);$("teacherForm").style.display=t?"block":"none";$("adminForm").style.display=t?"none":"block";$("authMsg").style.display="none";}
@@ -115,10 +132,12 @@ async function route(){
     $("roleBadge").textContent="Admin";$("who").textContent=ME.email;
     $("nav").style.display="flex";
     $("nav").innerHTML=TABS.map(([k,l])=>`<a class="${k===TAB?'on':''}" onclick="go('${k}')">${l}</a>`).join("");
+    setTask(TASKTEXT[TAB]||"");
     await loadRefs();renderAdmin();
   }else{
     $("roleBadge").textContent="Teacher";$("who").textContent=TNAME;
     $("nav").style.display="none";$("nav").innerHTML="";
+    setTask(TEACHER_TASK);
     renderTeacher();
   }
 }
