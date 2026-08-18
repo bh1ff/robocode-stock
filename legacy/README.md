@@ -12,3 +12,8 @@ where a finished kit does.
 invoice and topped up **component** stock. v2 has no component stock, so the feature
 is not carried over. The function itself still sits in `../supabase/functions/invoice/`
 if you ever want it back.
+
+`teachers.sql`, `teachers_v2.sql` and `teacher_admin.sql` are also retired. They
+build the username + password teacher model and read `components`, which v2
+drops. Teachers are now kiosk users identified by a code — `schema.sql` creates
+that table itself, and the kiosk functions will live in `kiosk.sql`.

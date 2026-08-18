@@ -17,15 +17,14 @@ Run in the Supabase SQL editor, in this order:
 
 | Order | File | What it does |
 |---|---|---|
-| 1 | `teachers.sql` | teacher logins (skip if already run) |
-| 2 | `schema.sql` | retires v1, creates the kit model, migrates franchises + students |
-| 3 | `seed.sql` | the 14 kit types with real landed costs and suggested prices |
-| 4 | `teachers_v2.sql` | re-points the teacher functions at the new tables |
-| 5 | `teacher_admin.sql` | optional: password reset / deactivate helpers |
+| 1 | `schema.sql` | retires v1, creates the kit model, migrates franchises + students |
+| 2 | `seed.sql` | the 14 kit types with real landed costs and suggested prices |
 
-`teachers_v2.sql` matters: v1's `teacher_log` wrote to the `movements` table,
-which no longer exists. It is replaced by `teacher_log_part`, which writes to
-the replacements log.
+That is the whole thing. `schema.sql` creates every table it needs, including
+`teachers`, so there is nothing to run before it.
+
+The teacher kiosk functions (`kiosk.sql`) are not written yet — until they are,
+the Admin tab's teacher section will not work. Everything else does.
 
 `schema.sql` is safe to re-run. It **renames** v1's `kits`, `students` and
 `franchises` to `*_v1` rather than dropping them, and copies the franchises and
