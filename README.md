@@ -1,26 +1,67 @@
-# ROBOCODE Stock
+# ROBOCODE Kit Stock
 
-Kit and component stock management for ROBOCODE robotics courses. Tracks every part across three states (in storage, on loan, sold/lost), kit issue/return (rent = free loan, buy = paid), a lost/extra-parts log, low-stock alerts, and per-course kit cost and margin.
+Tracks **finished kits**, not components: how many we built, who they went to,
+who has paid, and what is still out on loan.
+
+v1 tracked every individual part through a movements ledger. That was more
+bookkeeping than it was worth — component quantities now come from the BOM
+generator in `1 Kit Data/`, and this app starts at the point a kit is built.
 
 ## Stack
-- **Supabase** (Postgres + Auth + auto REST API, free tier) — system of record
-- **Static web app** (`index.html`, plain JS + `supabase-js` from CDN) — no build step. Open the file locally or host on GitHub Pages / Vercel / Netlify.
+- **Supabase** (Postgres + Auth + auto REST API) — system of record
+- **`index.html`** — one file, plain JS, `supabase-js` from CDN, no build step
 
 ## Setup
-1. In the Supabase SQL editor, run `schema.sql` then `security.sql`.
-2. In `index.html`, confirm `SUPABASE_URL` and `SUPABASE_ANON` point at your project (the anon key is public by design; row-level security protects the data).
-3. Create a staff login: Supabase dashboard → Authentication → Users → Add user (set a password, mark email confirmed). Or use "Create account" in the app if email confirmation is off.
-4. Open `index.html` (or deploy it) and sign in.
 
-## Data model
-Every event is a row in `movements`; stock levels are **derived**, never edited directly.
+Run in the Supabase SQL editor, in this order:
 
-- `components` — parts (URN, cost, supplier links, reorder level)
-- `kits` / `kit_items` — the bill of materials per course
-- `students`, `issues` (one per kit handed out), `movements` (the ledger)
-- Views: `v_stock`, `v_open_loans` (who holds what), `v_kit_cost`
-- Functions: `issue_kit()`, `return_issue()`
+| Order | File | What it does |
+|---|---|---|
+| 1 | `teachers.sql` | teacher logins (skip if already run) |
+| 2 | `schema.sql` | retires v1, creates the kit model, migrates franchises + students |
+| 3 | `seed.sql` | the 14 kit types with real landed costs and suggested prices |
+| 4 | `teachers_v2.sql` | re-points the teacher functions at the new tables |
+| 5 | `teacher_admin.sql` | optional: password reset / deactivate helpers |
+
+`teachers_v2.sql` matters: v1's `teacher_log` wrote to the `movements` table,
+which no longer exists. It is replaced by `teacher_log_part`, which writes to
+the replacements log.
+
+`schema.sql` is safe to re-run. It **renames** v1's `kits`, `students` and
+`franchises` to `*_v1` rather than dropping them, and copies the franchises and
+students across. Drop the `_v1` tables by hand once you are happy.
+
+Then open `index.html` and sign in with a Supabase user
+(Dashboard → Authentication → Users → Add user, email confirmed).
+
+## How it works
+
+**Stock is derived, never typed.** Every change is a row in `kit_moves` with a
+signed delta. Building 30 kits is `+30`; an order line going out is `-30`; a loan
+coming back is `+1`. `v_kit_stock` adds them up. Triggers write those rows, so
+stock cannot drift from the orders.
+
+**An order** has one customer, one requesting teacher, and any number of lines.
+Each line is a **sale** or a **loan**, for a quantity of one kit type, optionally
+against a named student. Loans carry a due date and are chased on the *On loan* tab.
+
+**Payment is per order** — paid or unpaid, with a reference. The order total is
+the sale lines only; loans are free and do not appear in money owed.
+
+**Spares log** records replacement parts handed to a child. It is a record only
+and does not touch kit stock.
+
+## Tabs
+`Stock` build kits, see availability · `New order` · `Orders` ·
+`Money owed` · `On loan` overdue in red · `Customers` · `Spares log` ·
+`Admin` kit prices, teachers
+
+## Prices
+Cost per kit is generated from the real BOM and supplier quote by
+`1 Kit Data/build_stock_seed.py`. Re-running `seed.sql` **updates cost but never
+overwrites your prices** — set those once in Admin and they stick.
 
 ## Security
-- Only the **anon public key** lives in this repo (safe under RLS). Never commit the service-role key or DB password.
-- Seeding was done with a service-role key; rotate it in the Supabase dashboard if it was ever shared.
+Only the **anon public key** is in this repo; row-level security protects the
+data and every table requires a signed-in staff user. Never commit the
+service-role key or the database password.

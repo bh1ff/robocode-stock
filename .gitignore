@@ -3,3 +3,5 @@
 *.key
 seed_secret*
 .DS_Store
+._*
+.AppleDouble
