@@ -56,9 +56,13 @@ and does not touch kit stock.
 `Admin` kit prices, teachers
 
 ## Prices
-Cost per kit is generated from the real BOM and supplier quote by
-`1 Kit Data/build_stock_seed.py`. Re-running `seed.sql` **updates cost but never
-overwrites your prices** — set those once in Admin and they stick.
+**Flat: every younger kit £30, every older kit £40** — same to a franchise or an
+individual. Set in `PRICE` at the top of `1 Kit Data/build_stock_seed.py`.
+
+Cost per kit is generated from the real BOM and supplier quote by the same
+script. Note that `seed.sql` now **overwrites prices** on every run, so if you
+edit a price in Admin and later re-seed, your edit is replaced. Change `PRICE`
+and regenerate instead.
 
 ## Database migration (Supabase CLI)
 

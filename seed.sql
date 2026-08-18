@@ -4,24 +4,28 @@
 -- + sea freight apportioned by weight. USD converted at 0.745178.
 
 insert into kits (code, name, audience, sort_order, unit_cost, price_trade, price_retail) values
-  ('C1', 'Electronics & Circuits', 'older', 0, 11.30, 23.00, 29.00),
-  ('C2', 'Robot Car', 'older', 1, 10.07, 21.00, 26.00),
-  ('C3', 'Wireless & Sensing', 'older', 2, 15.22, 31.00, 39.00),
-  ('C4', 'Robot Arm & Vision', 'older', 3, 13.84, 28.00, 35.00),
-  ('YB1', 'Operation', 'younger', 4, 4.71, 10.00, 12.00),
-  ('YB2', 'Traffic', 'younger', 5, 9.83, 20.00, 25.00),
-  ('YB3', 'Plant', 'younger', 6, 8.89, 18.00, 23.00),
-  ('YB4', 'Logic', 'younger', 7, 3.02, 7.00, 8.00),
-  ('YB5', 'Spy', 'younger', 8, 6.79, 14.00, 17.00),
-  ('YB6', 'Dinosaur', 'younger', 9, 5.55, 12.00, 14.00),
-  ('YB7', 'Sound', 'younger', 10, 7.20, 15.00, 18.00),
-  ('YB8', 'House', 'younger', 11, 7.41, 15.00, 19.00),
-  ('YB9', 'Motion', 'younger', 12, 6.31, 13.00, 16.00),
-  ('YB10', 'Drawing', 'younger', 13, 9.89, 20.00, 25.00)
+  ('C1', 'Electronics & Circuits', 'older', 0, 11.30, 40.00, 40.00),
+  ('C2', 'Robot Car', 'older', 1, 10.07, 40.00, 40.00),
+  ('C3', 'Wireless & Sensing', 'older', 2, 15.22, 40.00, 40.00),
+  ('C4', 'Robot Arm & Vision', 'older', 3, 13.84, 40.00, 40.00),
+  ('YB1', 'Operation', 'younger', 4, 4.71, 30.00, 30.00),
+  ('YB2', 'Traffic', 'younger', 5, 9.83, 30.00, 30.00),
+  ('YB3', 'Plant', 'younger', 6, 8.89, 30.00, 30.00),
+  ('YB4', 'Logic', 'younger', 7, 3.02, 30.00, 30.00),
+  ('YB5', 'Spy', 'younger', 8, 6.79, 30.00, 30.00),
+  ('YB6', 'Dinosaur', 'younger', 9, 5.55, 30.00, 30.00),
+  ('YB7', 'Sound', 'younger', 10, 7.20, 30.00, 30.00),
+  ('YB8', 'House', 'younger', 11, 7.41, 30.00, 30.00),
+  ('YB9', 'Motion', 'younger', 12, 6.31, 30.00, 30.00),
+  ('YB10', 'Drawing', 'younger', 13, 9.89, 30.00, 30.00)
 on conflict (code) do update set
   name = excluded.name, audience = excluded.audience, sort_order = excluded.sort_order,
   unit_cost = excluded.unit_cost;
--- prices are NOT overwritten on re-run: set them once in the app and they stick.
+
+-- Flat sell price: every younger kit 30.00, every older kit 40.00, trade and retail alike.
+-- This DOES overwrite, so re-running resets any price edited in the app.
+update kits set price_trade = 40.00, price_retail = 40.00 where audience = 'older';
+update kits set price_trade = 30.00, price_retail = 30.00 where audience = 'younger';
 
 insert into parts (urn, name, unit_cost) values
   ('B-001', 'Arduino Uno', 0.0000),
