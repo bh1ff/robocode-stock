@@ -2,6 +2,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ROBOCODE — Kit Stock</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 :root{--turq:#00DCDE;--dark:#003439;--pink:#FF00BF;--tan:#FF9752;
       --bg:#f4f7f8;--card:#fff;--line:#dfe6e8;--muted:#6a7787;--ok:#1d7d5a;--bad:#c0392b;--warn:#a06000}
@@ -222,7 +223,23 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 
 <!-- ---------------- PEOPLE ---------------- -->
 <section class="panel" id="p_people">
-  <div class="card"><h2>Add customer</h2><div class="row">
+  <div class="card">
+    <h2>Bulk import customers</h2>
+    <div class="row">
+      <a class="btn alt" href="templates/customers.xlsx" download>⤓ Download Excel template</a>
+      <div style="flex:1;min-width:220px">
+        <label>Then upload the filled file</label>
+        <input type="file" id="imp_file" accept=".xlsx,.xls,.csv" style="width:100%">
+      </div>
+    </div>
+    <p class="muted" style="font-size:12px;margin:10px 0 0">
+      Only <b>name</b> and <b>type</b> are required. Type must be franchise, centre,
+      school or individual. Anything already on the list is skipped, so you can
+      re-upload a corrected file safely. Accepts .xlsx or .csv.</p>
+    <div id="imp_preview" class="hide" style="margin-top:14px"></div>
+  </div>
+
+  <div class="card"><h2>Add one customer</h2><div class="row">
     <div style="min-width:180px"><label>Name</label><input id="c_name" style="width:100%"></div>
     <div><label>Type</label><select id="c_type">
       <option value="franchise">Franchise</option><option value="centre">Our centre</option>
@@ -689,6 +706,80 @@ $('#st_go').onclick = async () => {
   if(error) return toast(error.message, true);
   ['#st_name','#st_course','#st_contact'].forEach(i=>$(i).value='');
   toast('Student added'); refresh();
+};
+
+/* ---------- bulk import ---------- */
+const IMP_COLS = ['name','type','contact_name','email','phone','address','notes'];
+const IMP_TYPES = ['franchise','centre','school','individual'];
+let impRows = [];
+
+$('#imp_file').onchange = async (e) => {
+  const file = e.target.files[0]; if(!file) return;
+  let rows;
+  try {
+    const buf = await file.arrayBuffer();
+    const wb  = XLSX.read(buf, {type:'array'});
+    // the data sheet is the one called Customers; fall back to the first sheet
+    const name = wb.SheetNames.find(n => /customer/i.test(n) && !/example/i.test(n)) || wb.SheetNames[0];
+    rows = XLSX.utils.sheet_to_json(wb.Sheets[name], {header:1, blankrows:false, defval:''});
+  } catch(err){ return toast('Could not read that file: '+err.message, true); }
+
+  // find the header row wherever it sits, so a tweaked template still works
+  const hi = rows.findIndex(r => r.map(c=>String(c).trim().toLowerCase()).includes('name'));
+  if(hi < 0) return toast('No "name" column found — use the template', true);
+  const head = rows[hi].map(c => String(c).trim().toLowerCase());
+  const idx  = Object.fromEntries(IMP_COLS.map(c => [c, head.indexOf(c)]));
+  if(idx.type < 0) return toast('No "type" column found — use the template', true);
+
+  const existing = new Set(CUST.map(c => (c.name+'|'+c.type).toLowerCase()));
+  const seen = new Set();
+  impRows = [];
+  rows.slice(hi+1).forEach((r, n) => {
+    const get = k => idx[k] >= 0 ? String(r[idx[k]] ?? '').trim() : '';
+    const name = get('name'); if(!name) return;                 // blank row
+    const type = get('type').toLowerCase();
+    const key  = (name+'|'+type).toLowerCase();
+    let err = '';
+    if(!IMP_TYPES.includes(type))  err = 'type must be '+IMP_TYPES.join(' / ');
+    else if(existing.has(key))     err = 'already on the list';
+    else if(seen.has(key))         err = 'duplicated in this file';
+    seen.add(key);
+    impRows.push({row: hi+2+n, err,
+      data:{name, type, contact_name:get('contact_name')||null, email:get('email')||null,
+            phone:get('phone')||null, address:get('address')||null, notes:get('notes')||null}});
+  });
+
+  if(!impRows.length){ $('#imp_preview').classList.add('hide'); return toast('No rows found in that file', true); }
+  const good = impRows.filter(r=>!r.err), bad = impRows.filter(r=>r.err);
+  $('#imp_preview').classList.remove('hide');
+  $('#imp_preview').innerHTML = `
+    <div class="row" style="margin-bottom:10px">
+      <div class="stat"><div class="lbl">Ready to add</div><div class="big">${good.length}</div></div>
+      <div class="stat"><div class="lbl">Skipped</div>
+        <div class="big" style="${bad.length?'color:var(--bad)':''}">${bad.length}</div></div>
+      <button class="btn right" id="imp_go"${good.length?'':' disabled'}>Add ${good.length} customer${good.length===1?'':'s'}</button>
+    </div>
+    <table><thead><tr><th>Row</th><th>Name</th><th>Type</th><th>Contact</th><th>Email</th><th>Status</th>
+      </tr></thead><tbody>${impRows.slice(0,200).map(r=>`<tr${r.err?' class="warnrow"':''}>
+      <td class="muted">${r.row}</td><td><b>${esc(r.data.name)}</b></td><td>${esc(r.data.type||'—')}</td>
+      <td>${esc(r.data.contact_name||'—')}</td><td>${esc(r.data.email||'—')}</td>
+      <td>${r.err?`<span class="tag unpaid">${esc(r.err)}</span>`:'<span class="tag paid">ok</span>'}</td>
+      </tr>`).join('')}</tbody></table>
+    ${impRows.length>200?`<p class="muted" style="font-size:12px">Showing the first 200 of ${impRows.length} rows.</p>`:''}`;
+
+  $('#imp_go').onclick = async () => {
+    const payload = impRows.filter(r=>!r.err).map(r=>r.data);
+    if(!payload.length) return;
+    $('#imp_go').disabled = true;
+    // unique(name,type) means a re-upload cannot create duplicates
+    const {error} = await sb.from('customers')
+      .upsert(payload, {onConflict:'name,type', ignoreDuplicates:true});
+    $('#imp_go').disabled = false;
+    if(error) return toast(error.message, true);
+    toast(`Added ${payload.length} customer${payload.length===1?'':'s'}`);
+    $('#imp_preview').classList.add('hide'); $('#imp_file').value=''; impRows=[];
+    await refresh();
+  };
 };
 
 /* ---------- spares ---------- */
