@@ -101,7 +101,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
   <button data-p="money">Money owed <span class="pill hide" id="pill_money"></span></button>
   <button data-p="loans">On loan <span class="pill hide" id="pill_loans"></span></button>
   <button data-p="people">Customers</button>
-  <button data-p="spares">Spares log</button>
+  <button data-p="requests">Requests <span class="pill hide" id="pill_req"></span></button>
   <button data-p="admin">Admin</button>
 </nav>
 <main>
@@ -266,23 +266,25 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
   </div>
 </section>
 
-<!-- ---------------- SPARES ---------------- -->
-<section class="panel" id="p_spares">
-  <div class="card"><h2>Log a replacement part</h2><div class="row">
-    <div style="min-width:200px"><label>Part</label><select id="sp_part"></select></div>
-    <div><label>Qty</label><input id="sp_qty" type="number" value="1" style="width:80px"></div>
-    <div style="min-width:170px"><label>Student</label><select id="sp_student"></select></div>
-    <div style="min-width:160px"><label>Given by</label><select id="sp_teacher"></select></div>
-    <div style="flex:1;min-width:160px"><label>Reason</label>
-      <input id="sp_reason" placeholder="lost / broken / faulty" style="width:100%"></div>
-    <button class="btn" id="sp_go">Log</button>
+<!-- ---------------- REQUESTS ---------------- -->
+<section class="panel" id="p_requests">
+  <div class="card"><div class="row">
+    <div class="stat"><div class="lbl">Kit requests waiting</div><div class="big" id="rq_k">—</div></div>
+    <div class="stat"><div class="lbl">Part requests waiting</div><div class="big" id="rq_i">—</div></div>
+    <div class="right"><label>Show</label><select id="rq_filter">
+      <option value="pending">Waiting only</option><option value="all">Everything</option></select></div>
+  </div></div>
+
+  <div class="card"><h2>Kit requests</h2>
+    <table><thead><tr><th>When</th><th>Teacher</th><th>Kit</th><th>For</th><th class="num">Qty</th>
+      <th>Type</th><th>Needed by</th><th class="num">In stock</th><th>Status</th><th></th>
+    </tr></thead><tbody id="t_rq_kits"></tbody></table>
   </div>
-  <p class="muted" style="font-size:12px;margin:10px 0 0">
-    This is a record only — it does not change kit stock. Use it to see what spares are costing you.</p>
-  </div>
-  <div class="card"><h2>Recent replacements</h2>
-    <table><thead><tr><th>When</th><th>Part</th><th class="num">Qty</th><th>Student</th>
-      <th>Given by</th><th>Reason</th></tr></thead><tbody id="t_spares"></tbody></table>
+
+  <div class="card"><h2>Part requests</h2>
+    <table><thead><tr><th>When</th><th>Teacher</th><th>Part</th><th>For</th><th class="num">Qty</th>
+      <th>Reason</th><th>Status</th><th></th>
+    </tr></thead><tbody id="t_rq_items"></tbody></table>
   </div>
 </section>
 
@@ -298,15 +300,19 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
   </div>
   <div class="card"><h2>Teachers</h2>
     <p class="muted" style="font-size:12px;margin:0 0 10px">
-      The teacher kiosk is not built yet — <code>kiosk.sql</code> is still to come.
-      Adding a teacher will not work until it is run.</p>
+      Teachers sign in at <b>kiosk.html</b> with a code — they have no account and never see this app.
+      The code is shown once when you create it and is stored hashed, so it cannot be looked up later.
+      If a teacher forgets it, issue a new one. Requires <code>kiosk.sql</code> to have been run.</p>
     <div class="row">
-    <div><label>Username</label><input id="tc_user"></div>
-    <div><label>Full name</label><input id="tc_name"></div>
-    <div><label>Password</label><input id="tc_pass" type="text"></div>
+    <div style="min-width:200px"><label>Teacher name</label><input id="tc_name" style="width:100%"></div>
+    <div><label>Kiosk code</label><input id="tc_code" style="width:130px;font-family:monospace;
+      font-size:16px;letter-spacing:2px;text-transform:uppercase"></div>
+    <button class="btn alt" id="tc_gen">Generate</button>
     <button class="btn" id="tc_go">Add teacher</button>
   </div>
-  <table style="margin-top:12px"><thead><tr><th>Username</th><th>Name</th><th>Active</th>
+  <div id="tc_shown" class="hide" style="margin-top:12px;padding:14px;border-radius:8px;
+       background:#e0f7f8;border:1px solid var(--turq)"></div>
+  <table style="margin-top:12px"><thead><tr><th>Name</th><th>Active</th><th></th>
     </tr></thead><tbody id="t_teachers"></tbody></table>
   </div>
 </section>
@@ -344,7 +350,8 @@ const opts = (arr, val, lab, blank) =>
   arr.map(o=>`<option value="${o[val]}">${esc(o[lab])}</option>`).join('');
 
 /* ---------- state ---------- */
-let KITS=[], STOCK=[], CUST=[], STUD=[], TEACH=[], PARTS=[], ORDERS=[], LOANS=[], BAL=[];
+let KITS=[], STOCK=[], CUST=[], STUD=[], TEACH=[], PARTS=[], ORDERS=[], LOANS=[], BAL=[],
+    RQK=[], RQI=[];
 
 /* ---------- auth ---------- */
 $('#li_go').onclick = async () => {
@@ -411,26 +418,29 @@ async function boot(){
 }
 
 async function refresh(){
-  [KITS, STOCK, CUST, STUD, TEACH, PARTS, ORDERS, LOANS, BAL] = await Promise.all([
+  [KITS, STOCK, CUST, STUD, TEACH, PARTS, ORDERS, LOANS, BAL, RQK, RQI] = await Promise.all([
     q('kits','*',{col:'sort_order'}),
     q('v_kit_stock','*',{col:'sort_order'}),
     q('customers','*',{col:'name'}),
     q('students','*',{col:'name'}),
-    q('teachers','id,username,name,active',{col:'name'}),
+    q('teachers','id,name,active',{col:'name'}),
     q('parts','*',{col:'urn'}),
     q('v_orders','*',{col:'order_date',asc:false}),
     q('v_open_loans','*',{col:'due_date'}),
-    q('v_customer_balance','*',{col:'name'})
+    q('v_customer_balance','*',{col:'name'}),
+    q('v_kit_requests','*',{col:'created_at',asc:false}),
+    q('v_item_requests','*',{col:'created_at',asc:false})
   ]);
   drawStock(); drawPickers(); drawOrders(); drawMoney(); drawLoans();
-  drawPeople(); drawSpares(); drawAdmin(); drawBadges();
+  drawPeople(); drawRequests(); drawAdmin(); drawBadges();
 }
 
 function drawBadges(){
   const unpaid = ORDERS.filter(o=>!o.paid && o.total_due>0).length;
   const late   = LOANS.filter(l=>l.days_overdue>0).length;
+  const waiting = RQK.filter(r=>r.status==='pending').length + RQI.filter(r=>r.status==='pending').length;
   const set=(id,n)=>{ const e=$(id); e.textContent=n; e.classList.toggle('hide', !n); };
-  set('#pill_money', unpaid); set('#pill_loans', late);
+  set('#pill_money', unpaid); set('#pill_loans', late); set('#pill_req', waiting);
 }
 
 /* ---------- stock ---------- */
@@ -465,9 +475,6 @@ function drawPickers(){
   $('#o_cust').innerHTML  = opts(CUST.map(c=>({id:c.id,l:`${c.name} (${c.type})`})),'id','l','Choose customer…');
   $('#o_teacher').innerHTML = opts(TEACH.filter(t=>t.active),'id','name','—');
   $('#st_cust').innerHTML = opts(CUST,'id','name','—');
-  $('#sp_part').innerHTML = opts(PARTS.map(p=>({id:p.id,l:`${p.urn} — ${p.name}`})),'id','l','Choose part…');
-  $('#sp_student').innerHTML = opts(STUD,'id','name','—');
-  $('#sp_teacher').innerHTML = opts(TEACH.filter(t=>t.active),'id','name','—');
 }
 
 /* ---------- order builder ---------- */
@@ -782,27 +789,64 @@ $('#imp_file').onchange = async (e) => {
   };
 };
 
-/* ---------- spares ---------- */
-async function drawSpares(){
-  const {data} = await sb.from('replacements')
-    .select('id,qty,reason,occurred_at,parts(urn,name),students(name),teachers(name)')
-    .order('occurred_at',{ascending:false}).limit(60);
-  $('#t_spares').innerHTML = (data||[]).map(r=>`<tr>
-    <td>${new Date(r.occurred_at).toLocaleDateString('en-GB')}</td>
-    <td><b>${esc(r.parts?.urn||'')}</b> ${esc(r.parts?.name||'')}</td>
-    <td class="num">${r.qty}</td><td>${esc(r.students?.name||'—')}</td>
-    <td>${esc(r.teachers?.name||'—')}</td><td class="muted">${esc(r.reason||'')}</td></tr>`).join('')
-    || '<tr><td colspan="6" class="muted">Nothing logged.</td></tr>';
+/* ---------- requests ---------- */
+const when = d => new Date(d).toLocaleDateString('en-GB',{day:'2-digit',month:'short'});
+const rtag = s => `<span class="tag ${s==='done'?'paid':s==='rejected'?'unpaid':s==='approved'?'sale':'loan'}">${esc(s)}</span>`;
+
+function drawRequests(){
+  const all = $('#rq_filter') && $('#rq_filter').value === 'all';
+  const k = RQK.filter(r=>all || r.status==='pending');
+  const i = RQI.filter(r=>all || r.status==='pending');
+  $('#rq_k').textContent = RQK.filter(r=>r.status==='pending').length;
+  $('#rq_i').textContent = RQI.filter(r=>r.status==='pending').length;
+
+  $('#t_rq_kits').innerHTML = k.map(r=>{
+    const short = r.kit_available !== null && r.qty > r.kit_available;
+    return `<tr${short&&r.status==='pending'?' class="warnrow"':''}>
+    <td class="muted">${when(r.created_at)}</td><td>${esc(r.teacher||'—')}</td>
+    <td><b>${esc(r.kit_code)}</b> ${esc(r.kit_name)}</td>
+    <td>${esc(r.student||'—')}<div class="muted" style="font-size:11px">${esc(r.customer||'no customer set')}</div></td>
+    <td class="num">${r.qty}</td><td><span class="tag ${esc(r.kind)}">${esc(r.kind)}</span></td>
+    <td>${esc(r.needed_by||'—')}</td>
+    <td class="num"${short?' style="color:var(--bad);font-weight:700"':''}>${r.kit_available ?? '—'}</td>
+    <td>${rtag(r.status)}</td>
+    <td>${r.status==='pending' ? `<button class="mini" onclick="fulfilKit(${r.id})">Make order</button>
+        <button class="mini" onclick="rejectReq('kit_requests',${r.id})">Reject</button>` :
+        (r.order_id?`<button class="mini" onclick="showOrder(${r.order_id})">Order</button>`:'')}</td>
+    </tr>`;}).join('') || '<tr><td colspan="10" class="muted">Nothing waiting.</td></tr>';
+
+  $('#t_rq_items').innerHTML = i.map(r=>`<tr>
+    <td class="muted">${when(r.created_at)}</td><td>${esc(r.teacher||'—')}</td>
+    <td><b>${esc(r.urn||'')}</b> ${esc(r.part||'')}</td>
+    <td>${esc(r.student||'—')}</td><td class="num">${r.qty}</td>
+    <td class="muted">${esc(r.reason||'')}</td><td>${rtag(r.status)}</td>
+    <td>${r.status==='pending' ? `<button class="mini" onclick="markReq('item_requests',${r.id},'done')">Given</button>
+        <button class="mini" onclick="rejectReq('item_requests',${r.id})">Reject</button>`:''}</td>
+    </tr>`).join('') || '<tr><td colspan="8" class="muted">Nothing waiting.</td></tr>';
 }
-$('#sp_go').onclick = async () => {
-  const part=$('#sp_part').value; if(!part) return toast('Choose a part', true);
-  const stud=$('#sp_student').value||null;
-  const cust=stud ? (STUD.find(s=>s.id==stud)?.customer_id||null) : null;
-  const {error} = await sb.from('replacements').insert({part_id:+part, student_id:stud,
-    customer_id:cust, teacher_id:$('#sp_teacher').value||null,
-    qty:+$('#sp_qty').value||1, reason:$('#sp_reason').value||null});
+document.addEventListener('change', e => { if(e.target.id==='rq_filter') drawRequests(); });
+
+window.fulfilKit = async (id) => {
+  const r = RQK.find(x=>x.id===id);
+  if(r && r.kit_available !== null && r.qty > r.kit_available &&
+     !confirm(`Only ${r.kit_available} of ${r.kit_code} in stock, this needs ${r.qty}.\n\nMake the order anyway?`)) return;
+  const note = prompt('Note for the order (optional)') ; if(note===null) return;
+  const {data, error} = await sb.rpc('fulfil_kit_request',{p_req:id, p_note:note||null});
   if(error) return toast(error.message, true);
-  $('#sp_reason').value=''; $('#sp_qty').value=1; toast('Logged'); drawSpares();
+  toast('Order created'); await refresh(); showOrder(data);
+};
+window.markReq = async (table, id, status) => {
+  const {error} = await sb.from(table)
+    .update({status, handled_at:new Date().toISOString()}).eq('id',id);
+  if(error) return toast(error.message, true);
+  toast(status==='done'?'Marked given':'Updated'); refresh();
+};
+window.rejectReq = async (table, id) => {
+  const why = prompt('Why is it being turned down? (optional)'); if(why===null) return;
+  const {error} = await sb.from(table)
+    .update({status:'rejected', handled_at:new Date().toISOString(), handled_note:why||null}).eq('id',id);
+  if(error) return toast(error.message, true);
+  toast('Rejected'); refresh();
 };
 
 /* ---------- admin ---------- */
@@ -814,9 +858,11 @@ function drawAdmin(){
     <td class="num"><input type="number" step="0.01" value="${k.price_retail}" id="kr_${k.id}" style="width:90px"></td>
     <td class="num">${k.unit_cost>0?Math.round((k.price_trade/k.unit_cost)*10)/10+'×':'—'}</td>
     <td><button class="mini" onclick="savePrice(${k.id})">Save</button></td></tr>`).join('');
-  $('#t_teachers').innerHTML = TEACH.map(t=>`<tr><td>${esc(t.username)}</td><td>${esc(t.name||'—')}</td>
-    <td><span class="tag ${t.active?'paid':'unpaid'}">${t.active?'active':'off'}</span></td></tr>`).join('')
-    || '<tr><td colspan="3" class="muted">No teachers yet.</td></tr>';
+  $('#t_teachers').innerHTML = TEACH.map(t=>`<tr><td><b>${esc(t.name)}</b></td>
+    <td><span class="tag ${t.active?'paid':'unpaid'}">${t.active?'active':'off'}</span></td>
+    <td><button class="mini" onclick="newCode(${t.id},'${esc(t.name)}')">New code</button>
+        <button class="mini" onclick="toggleTeacher(${t.id},${!t.active})">${t.active?'Deactivate':'Reactivate'}</button></td>
+    </tr>`).join('') || '<tr><td colspan="3" class="muted">No teachers yet.</td></tr>';
 }
 window.savePrice = async (id) => {
   const {error} = await sb.from('kits').update({
@@ -824,13 +870,44 @@ window.savePrice = async (id) => {
   if(error) return toast(error.message, true);
   toast('Prices saved'); refresh();
 };
+// no 0/O/1/I to misread on a printed card
+const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const makeCode = () => Array.from(crypto.getRandomValues(new Uint8Array(6)))
+  .map(b => ALPHABET[b % ALPHABET.length]).join('');
+
+$('#tc_gen').onclick = () => { $('#tc_code').value = makeCode(); };
+
 $('#tc_go').onclick = async () => {
-  const u=$('#tc_user').value.trim(), p=$('#tc_pass').value, n=$('#tc_name').value.trim();
-  if(!u||!p) return toast('Username and password required', true);
-  const {error} = await sb.rpc('create_teacher',{p_user:u,p_pass:p,p_name:n});
+  const n = $('#tc_name').value.trim();
+  const c = ($('#tc_code').value || makeCode()).trim().toUpperCase();
+  if(!n) return toast('Name required', true);
+  if(c.length < 5) return toast('Code must be at least 5 characters', true);
+  const {error} = await sb.rpc('create_teacher',{p_name:n, p_code:c});
   if(error) return toast(error.message, true);
-  ['#tc_user','#tc_pass','#tc_name'].forEach(i=>$(i).value='');
+  const box = $('#tc_shown');
+  box.classList.remove('hide');
+  box.innerHTML = `<b>${esc(n)}</b> can now sign in at <b>kiosk.html</b> with the code
+    <span style="font-family:monospace;font-size:22px;font-weight:800;letter-spacing:3px">${esc(c)}</span>
+    <div class="muted" style="font-size:12px;margin-top:6px">
+      Write this down now — it is stored hashed and cannot be shown again.</div>`;
+  $('#tc_name').value=''; $('#tc_code').value='';
   toast('Teacher added'); refresh();
+};
+
+window.newCode = async (id, name) => {
+  const c = makeCode();
+  if(!confirm(`Give ${name} a new code?\n\nTheir old one stops working immediately.`)) return;
+  const {error} = await sb.rpc('set_teacher_code',{p_id:id, p_code:c});
+  if(error) return toast(error.message, true);
+  const box = $('#tc_shown'); box.classList.remove('hide');
+  box.innerHTML = `New code for <b>${esc(name)}</b>:
+    <span style="font-family:monospace;font-size:22px;font-weight:800;letter-spacing:3px">${esc(c)}</span>
+    <div class="muted" style="font-size:12px;margin-top:6px">Write it down — it cannot be shown again.</div>`;
+};
+window.toggleTeacher = async (id, active) => {
+  const {error} = await sb.from('teachers').update({active}).eq('id',id);
+  if(error) return toast(error.message, true);
+  toast(active?'Reactivated':'Deactivated'); refresh();
 };
 
 boot();

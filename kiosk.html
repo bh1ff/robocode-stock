@@ -1,0 +1,241 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ROBOCODE — Teacher Kiosk</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--turq:#00DCDE;--dark:#003439;--pink:#FF00BF;--bg:#eef3f4;--card:#fff;
+      --line:#dbe4e6;--muted:#6a7787;--ok:#1d7d5a;--bad:#c0392b;--warn:#a06000}
+*{box-sizing:border-box}
+body{margin:0;font:16px/1.5 "Segoe UI",Helvetica,Arial,sans-serif;background:var(--bg);color:#12222a}
+header{background:var(--dark);color:#fff;padding:14px 20px;display:flex;align-items:center;gap:14px}
+header h1{font-size:18px;margin:0;letter-spacing:1px}header h1 span{color:var(--turq)}
+header .who{margin-left:auto;display:flex;align-items:center;gap:12px;font-size:14px}
+main{max-width:760px;margin:0 auto;padding:20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;margin-bottom:16px}
+h2{font-size:13px;letter-spacing:1px;text-transform:uppercase;color:var(--dark);margin:0 0 14px}
+label{display:block;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
+      color:var(--muted);margin:0 0 5px}
+input,select,textarea{font:inherit;width:100%;padding:13px 12px;border:2px solid var(--line);
+      border-radius:10px;background:#fff}
+input:focus,select:focus,textarea:focus{outline:0;border-color:var(--turq)}
+.fld{margin-bottom:14px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+button.big{width:100%;padding:16px;font-size:17px;font-weight:800;border:0;border-radius:12px;
+      background:var(--dark);color:#fff;cursor:pointer;letter-spacing:.5px}
+button.big:active{transform:translateY(1px)}
+button.big.ghost{background:#fff;color:var(--dark);border:2px solid var(--line)}
+button.big:disabled{opacity:.5}
+.pick{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.pick button{padding:30px 18px;font-size:19px;font-weight:800;border:2px solid var(--line);
+      border-radius:16px;background:#fff;cursor:pointer;color:var(--dark);line-height:1.3}
+.pick button:hover{border-color:var(--turq);background:#f2fdfd}
+.pick button small{display:block;font-size:13px;font-weight:500;color:var(--muted);margin-top:7px}
+#code{font-size:34px;letter-spacing:10px;text-align:center;text-transform:uppercase;font-weight:800;padding:16px}
+.keys{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
+.keys button{padding:18px;font-size:21px;font-weight:700;border:2px solid var(--line);
+      border-radius:12px;background:#fff;cursor:pointer}
+.keys button:active{background:#e6f9fa}
+.hide{display:none!important}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);
+   padding:7px 6px;border-bottom:2px solid var(--line)}
+td{padding:8px 6px;border-bottom:1px solid var(--line)}
+.tag{display:inline-block;font-size:10px;font-weight:800;padding:3px 8px;border-radius:10px;
+     text-transform:uppercase;letter-spacing:.5px}
+.tag.pending{background:#fff0d8;color:var(--warn)}
+.tag.done{background:#d8f5e3;color:var(--ok)}
+.tag.rejected{background:#fde4e1;color:var(--bad)}
+.tag.approved{background:#e0f7f8;color:#046}
+.muted{color:var(--muted)}
+#msg{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--dark);color:#fff;
+     padding:14px 22px;border-radius:10px;display:none;font-weight:600;z-index:50;max-width:92vw}
+#msg.bad{background:var(--bad)}
+#done{text-align:center;padding:40px 20px}
+#done .tick{font-size:56px;color:var(--ok)}
+</style></head><body>
+
+<header><h1>ROBO<span>CODE</span> &nbsp;Teacher Kiosk</h1>
+  <div class="who"><span id="who"></span>
+    <button class="big ghost hide" id="out" style="width:auto;padding:8px 14px;font-size:13px">Finish</button></div>
+</header>
+<main>
+
+<!-- code entry -->
+<section id="s_login">
+  <div class="card">
+    <h2>Enter your code</h2>
+    <input id="code" maxlength="10" autocomplete="off" autocapitalize="characters" inputmode="text" placeholder="······">
+    <div class="keys">
+      <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+      <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+      <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+      <button data-k="back">←</button><button data-k="0">0</button><button data-k="go" style="background:var(--dark);color:#fff;border-color:var(--dark)">Go</button>
+    </div>
+    <p class="muted" style="font-size:13px;margin:14px 0 0">
+      Your code comes from the office. If it stops working, ask for a new one.</p>
+  </div>
+</section>
+
+<!-- what do you want to do -->
+<section id="s_menu" class="hide">
+  <div class="card"><h2>What do you need?</h2>
+    <div class="pick">
+      <button id="go_kit">Request a kit<small>for a child in your class</small></button>
+      <button id="go_item">Ask for a part<small>something lost or broken</small></button>
+    </div>
+  </div>
+  <div class="card"><h2>Your recent requests</h2><div id="recent"></div></div>
+</section>
+
+<!-- kit request -->
+<section id="s_kit" class="hide">
+  <div class="card"><h2>Request a kit</h2>
+    <div class="fld"><label>Which kit</label><select id="k_kit"></select></div>
+    <div class="fld"><label>Who is it for</label><select id="k_student"></select></div>
+    <div class="two">
+      <div class="fld"><label>How many</label><input id="k_qty" type="number" value="1" min="1"></div>
+      <div class="fld"><label>Loan or keep</label><select id="k_kind">
+        <option value="loan">On loan — comes back</option>
+        <option value="sale">To keep — being bought</option></select></div>
+    </div>
+    <div class="fld"><label>Needed by (optional)</label><input id="k_by" type="date"></div>
+    <div class="fld"><label>Anything to add (optional)</label>
+      <textarea id="k_reason" rows="2" placeholder="e.g. starting Course 1 next week"></textarea></div>
+    <button class="big" id="k_send">Send request</button>
+    <button class="big ghost" id="k_back" style="margin-top:10px">Back</button>
+  </div>
+</section>
+
+<!-- part request -->
+<section id="s_item" class="hide">
+  <div class="card"><h2>Ask for a part</h2>
+    <div class="fld"><label>Which part</label><select id="i_part"></select></div>
+    <div class="fld"><label>Who is it for (optional)</label><select id="i_student"></select></div>
+    <div class="fld"><label>How many</label><input id="i_qty" type="number" value="1" min="1"></div>
+    <div class="fld"><label>Why is it needed</label>
+      <textarea id="i_reason" rows="3" placeholder="e.g. Amir's Arduino will not power on"></textarea></div>
+    <button class="big" id="i_send">Send request</button>
+    <button class="big ghost" id="i_back" style="margin-top:10px">Back</button>
+  </div>
+</section>
+
+<!-- confirmation -->
+<section id="s_done" class="hide">
+  <div class="card" id="done">
+    <div class="tick">✓</div>
+    <h2 style="margin-top:10px">Sent to the office</h2>
+    <p class="muted" id="done_txt" style="margin-bottom:22px"></p>
+    <button class="big" id="d_more">Make another request</button>
+    <button class="big ghost" id="d_out" style="margin-top:10px">Finish</button>
+  </div>
+</section>
+
+</main><div id="msg"></div>
+<script>
+const SUPABASE_URL="https://dtggdbcortsnhqepfyem.supabase.co";
+const SUPABASE_ANON="sb_publishable_YH9wly7qxCjwuik1vw6c4g_H851pZhg";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {auth:{persistSession:false}});
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let CODE = null, LISTS = null, idle;
+
+function toast(t, bad){ const m=$('#msg'); m.textContent=t; m.className=bad?'bad':'';
+  m.style.display='block'; setTimeout(()=>m.style.display='none', bad?4200:2400); }
+function show(id){ ['s_login','s_menu','s_kit','s_item','s_done']
+  .forEach(s=>$('#'+s).classList.toggle('hide', s!==id)); }
+
+/* the code never persists - close the tab, or 3 minutes idle, and it is gone */
+function armIdle(){ clearTimeout(idle); idle = setTimeout(signOut, 180000); }
+document.addEventListener('click', () => { if(CODE) armIdle(); });
+function signOut(){ CODE=null; LISTS=null; clearTimeout(idle);
+  $('#code').value=''; $('#who').textContent=''; $('#out').classList.add('hide'); show('s_login'); }
+$('#out').onclick = signOut; $('#d_out').onclick = signOut;
+
+/* ---- keypad ---- */
+document.querySelectorAll('.keys button').forEach(b => b.onclick = () => {
+  const k = b.dataset.k, f = $('#code');
+  if(k==='back') f.value = f.value.slice(0,-1);
+  else if(k==='go') login();
+  else if(f.value.length < 10) f.value += k;
+});
+$('#code').addEventListener('keydown', e => { if(e.key==='Enter') login(); });
+
+async function login(){
+  const code = $('#code').value.trim();
+  if(code.length < 4) return toast('Enter your full code', true);
+  const {data, error} = await sb.rpc('kiosk_login', {p_code: code});
+  if(error) return toast(error.message, true);
+  if(!data || !data.length){ $('#code').value=''; return toast('That code is not recognised', true); }
+  CODE = code;
+  $('#who').textContent = data[0].name;
+  $('#out').classList.remove('hide');
+  const {data:l, error:e2} = await sb.rpc('kiosk_lists', {p_code: code});
+  if(e2) return toast(e2.message, true);
+  LISTS = l;
+  const opt = (a,v,t,blank) => (blank?`<option value="">${blank}</option>`:'') +
+    a.map(o=>`<option value="${o.id}">${esc(t(o))}</option>`).join('');
+  $('#k_kit').innerHTML     = opt(l.kits, 'id', o=>`${o.code} — ${o.name}`);
+  $('#k_student').innerHTML = opt(l.students,'id', o=>o.name, 'Choose a child…');
+  $('#i_part').innerHTML    = opt(l.parts,'id', o=>`${o.urn} — ${o.name}`, 'Choose a part…');
+  $('#i_student').innerHTML = opt(l.students,'id', o=>o.name, 'Not for one child');
+  armIdle(); await loadRecent(); show('s_menu');
+}
+
+async function loadRecent(){
+  const {data, error} = await sb.rpc('kiosk_my_requests', {p_code: CODE});
+  if(error) return;
+  const rows = [
+    ...data.kits.map(r=>({when:r.created_at, what:`${r.kit_code} ${r.kit_name}`,
+                          who:r.student||'—', qty:r.qty, status:r.status, tail:r.kind})),
+    ...data.items.map(r=>({when:r.created_at, what:`${r.urn} ${r.part}`,
+                          who:r.student||'—', qty:r.qty, status:r.status, tail:'part'}))
+  ].sort((a,b)=> new Date(b.when)-new Date(a.when)).slice(0,12);
+  $('#recent').innerHTML = rows.length ? `<table><thead><tr><th>When</th><th>What</th><th>For</th>
+    <th>Qty</th><th>Status</th></tr></thead><tbody>${rows.map(r=>`<tr>
+    <td class="muted">${new Date(r.when).toLocaleDateString('en-GB')}</td>
+    <td><b>${esc(r.what)}</b> <span class="muted">${esc(r.tail)}</span></td>
+    <td>${esc(r.who)}</td><td>${r.qty}</td>
+    <td><span class="tag ${esc(r.status)}">${esc(r.status)}</span></td></tr>`).join('')}</tbody></table>`
+    : '<p class="muted">Nothing yet.</p>';
+}
+
+/* ---- navigation ---- */
+$('#go_kit').onclick  = () => show('s_kit');
+$('#go_item').onclick = () => show('s_item');
+$('#k_back').onclick  = () => show('s_menu');
+$('#i_back').onclick  = () => show('s_menu');
+$('#d_more').onclick  = async () => { await loadRecent(); show('s_menu'); };
+
+/* ---- send ---- */
+$('#k_send').onclick = async () => {
+  if(!$('#k_student').value) return toast('Choose who it is for', true);
+  $('#k_send').disabled = true;
+  const {error} = await sb.rpc('kiosk_request_kit', {
+    p_code:CODE, p_kit:+$('#k_kit').value, p_student:+$('#k_student').value,
+    p_qty:+$('#k_qty').value||1, p_kind:$('#k_kind').value,
+    p_needed_by:$('#k_by').value||null, p_reason:$('#k_reason').value||null});
+  $('#k_send').disabled = false;
+  if(error) return toast(error.message, true);
+  const kit = $('#k_kit').selectedOptions[0].textContent;
+  const kid = $('#k_student').selectedOptions[0].textContent;
+  $('#done_txt').textContent = `${kit} for ${kid}. The office will sort it out.`;
+  $('#k_reason').value=''; $('#k_by').value=''; $('#k_qty').value=1;
+  show('s_done');
+};
+
+$('#i_send').onclick = async () => {
+  if(!$('#i_part').value)        return toast('Choose a part', true);
+  if(!$('#i_reason').value.trim()) return toast('Please say why it is needed', true);
+  $('#i_send').disabled = true;
+  const {error} = await sb.rpc('kiosk_request_item', {
+    p_code:CODE, p_part:+$('#i_part').value,
+    p_student:$('#i_student').value ? +$('#i_student').value : null,
+    p_qty:+$('#i_qty').value||1, p_reason:$('#i_reason').value.trim()});
+  $('#i_send').disabled = false;
+  if(error) return toast(error.message, true);
+  $('#done_txt').textContent = $('#i_part').selectedOptions[0].textContent + '. The office will sort it out.';
+  $('#i_reason').value=''; $('#i_qty').value=1;
+  show('s_done');
+};
+</script></body></html>

@@ -18,13 +18,10 @@ Run in the Supabase SQL editor, in this order:
 | Order | File | What it does |
 |---|---|---|
 | 1 | `schema.sql` | retires v1, creates the kit model, migrates franchises + students |
-| 2 | `seed.sql` | the 14 kit types with real landed costs and suggested prices |
+| 2 | `seed.sql` | the 14 kit types, their costs and the flat £30 / £40 prices |
+| 3 | `kiosk.sql` | teacher kiosk functions and teacher admin |
 
-That is the whole thing. `schema.sql` creates every table it needs, including
-`teachers`, so there is nothing to run before it.
-
-The teacher kiosk functions (`kiosk.sql`) are not written yet — until they are,
-the Admin tab's teacher section will not work. Everything else does.
+All three are safe to re-run.
 
 `schema.sql` is safe to re-run. It **renames** v1's `kits`, `students` and
 `franchises` to `*_v1` rather than dropping them, and copies the franchises and
@@ -50,10 +47,34 @@ the sale lines only; loans are free and do not appear in money owed.
 **Spares log** records replacement parts handed to a child. It is a record only
 and does not touch kit stock.
 
-## Tabs
-`Stock` build kits, see availability · `New order` · `Orders` ·
-`Money owed` · `On loan` overdue in red · `Customers` · `Spares log` ·
-`Admin` kit prices, teachers
+## Two pages, two kinds of user
+
+**`index.html` — the superadmin.** One Supabase Auth login, full access.
+Tabs: `Stock` · `New order` · `Orders` · `Money owed` · `On loan` ·
+`Customers` · `Requests` · `Admin`.
+
+**`kiosk.html` — teachers.** No account, no session, no password. A teacher
+types their code and can do exactly two things: request a kit for a named child,
+or ask for a part with a reason. That is the whole surface.
+
+### How teacher codes work
+Admin → Teachers → type a name, press **Generate**, then **Add teacher**. The
+code is shown **once**. It is stored as a salted hash, so nobody — including
+you — can look it up later. If a teacher forgets it, press **New code**; the old
+one dies immediately.
+
+Codes are six characters from an alphabet with no 0/O/1/I, so they survive being
+written on a card. Everything the kiosk does goes through SECURITY DEFINER
+functions, so the kiosk needs no table access at all and can only ever see
+student, kit and part *names*. Failed attempts are recorded in `kiosk_attempts`
+and 25 failures in ten minutes locks the door for a while.
+
+### Requests
+Teacher requests land on the admin **Requests** tab with a count badge.
+A kit request shows current stock and warns if there is not enough. **Make
+order** turns it into a real order in one step — right customer, right price,
+right due date — and links the two. Part requests are marked *given* or
+*rejected* with a note.
 
 ## Prices
 **Flat: every younger kit £30, every older kit £40** — same to a franchise or an
