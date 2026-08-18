@@ -5,3 +5,6 @@ seed_secret*
 .DS_Store
 ._*
 .AppleDouble
+supabase/.temp/
+supabase/.branches/
+.env.local

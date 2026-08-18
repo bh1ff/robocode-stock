@@ -38,15 +38,36 @@ do $$ begin create type line_status   as enum ('out','returned','lost');
   exception when duplicate_object then null; end $$;
 do $$ begin create type kit_move_type as enum ('built','out','returned','written_off','adjustment');
   exception when duplicate_object then null; end $$;
+do $$ begin create type request_status as enum ('pending','approved','rejected','done');
+  exception when duplicate_object then null; end $$;
 
--- ---------- staff (created by teachers.sql; guarded so run order does not matter) ----------
+-- ---------- teachers: kiosk users, identified by a code ----------
+-- There is exactly ONE real login (a Supabase Auth user = the superadmin).
+-- Teachers never get a session. They type a code into the kiosk and can only
+-- raise requests, through the SECURITY DEFINER functions in kiosk.sql.
+--
+-- v1/v2 teachers had username + password. Retire that shape if present.
+do $$ begin
+  if to_regclass('public.teachers') is not null
+     and exists (select 1 from information_schema.columns
+                  where table_schema='public' and table_name='teachers' and column_name='pass_hash')
+     and to_regclass('public.teachers_v1') is null
+  then alter table teachers rename to teachers_v1; end if;
+end $$;
+
 create table if not exists teachers (
   id         bigint generated always as identity primary key,
-  username   text unique not null,
-  name       text,
-  pass_hash  text not null,
+  name       text not null,
+  code_hash  text unique not null,      -- sha256(code + pepper); the code itself is never stored
   active     boolean default true,
   created_at timestamptz default now()
+);
+
+-- failed kiosk attempts, so abuse is visible
+create table if not exists kiosk_attempts (
+  id         bigint generated always as identity primary key,
+  at         timestamptz default now(),
+  note       text
 );
 
 -- ---------- who we deal with ----------
@@ -150,7 +171,8 @@ create table parts (
   active   boolean default true
 );
 
-create table replacements (
+-- a teacher asking for a part: "Amir needs a new Arduino, his is dead"
+create table item_requests (
   id          bigint generated always as identity primary key,
   part_id     bigint references parts(id),
   student_id  bigint references students(id),
@@ -158,9 +180,33 @@ create table replacements (
   teacher_id  bigint references teachers(id),
   qty         int not null default 1 check (qty > 0),
   reason      text,
-  occurred_at timestamptz default now()
+  status      request_status not null default 'pending',
+  handled_at  timestamptz,
+  handled_note text,
+  created_at  timestamptz default now()
 );
-create index on replacements (occurred_at);
+create index on item_requests (status);
+create index on item_requests (created_at);
+
+-- a teacher asking for a kit for a named child
+create table kit_requests (
+  id          bigint generated always as identity primary key,
+  kit_id      bigint not null references kits(id),
+  student_id  bigint references students(id),
+  customer_id bigint references customers(id),
+  teacher_id  bigint references teachers(id),
+  qty         int not null default 1 check (qty > 0),
+  kind        line_kind not null default 'loan',
+  needed_by   date,
+  reason      text,
+  status      request_status not null default 'pending',
+  order_id    bigint references orders(id) on delete set null,
+  handled_at  timestamptz,
+  handled_note text,
+  created_at  timestamptz default now()
+);
+create index on kit_requests (status);
+create index on kit_requests (created_at);
 
 -- ============================================================================
 -- triggers: keep the ledger honest
@@ -285,6 +331,32 @@ from customers c
   left join v_orders v on v.id = o.id
 group by c.id;
 
+-- what teachers have asked for, waiting on the superadmin
+create view v_kit_requests as
+select r.id, r.qty, r.kind, r.needed_by, r.reason, r.status, r.created_at,
+       r.handled_at, r.handled_note, r.order_id,
+       k.id as kit_id, k.code as kit_code, k.name as kit_name,
+       s.id as student_id, s.name as student,
+       c.id as customer_id, c.name as customer,
+       t.name as teacher,
+       st.available as kit_available
+from kit_requests r
+  join kits k on k.id = r.kit_id
+  left join students s   on s.id = r.student_id
+  left join customers c  on c.id = coalesce(r.customer_id, s.customer_id)
+  left join teachers t   on t.id = r.teacher_id
+  left join v_kit_stock st on st.id = r.kit_id;
+
+create view v_item_requests as
+select r.id, r.qty, r.reason, r.status, r.created_at, r.handled_at, r.handled_note,
+       p.urn, p.name as part,
+       s.name as student, c.name as customer, t.name as teacher
+from item_requests r
+  left join parts p     on p.id = r.part_id
+  left join students s  on s.id = r.student_id
+  left join customers c on c.id = coalesce(r.customer_id, s.customer_id)
+  left join teachers t  on t.id = r.teacher_id;
+
 -- ============================================================================
 -- helper functions
 -- ============================================================================
@@ -299,6 +371,38 @@ begin
     values (p_kit, p_qty, case when p_qty > 0 then 'built' else 'adjustment' end, p_note)
     returning id into v_id;
   return v_id;
+end $$;
+
+-- approve a kit request and raise the order for it in one step
+create or replace function fulfil_kit_request(p_req bigint, p_note text default null)
+returns bigint language plpgsql security invoker as $$
+declare r record; v_cust bigint; v_order bigint; v_price numeric;
+begin
+  select * into r from kit_requests where id = p_req;
+  if r is null then raise exception 'request % not found', p_req; end if;
+  if r.status = 'done' then raise exception 'request % already fulfilled', p_req; end if;
+
+  v_cust := coalesce(r.customer_id, (select customer_id from students where id = r.student_id));
+  if v_cust is null then
+    raise exception 'no customer on the request or the student - set one before fulfilling';
+  end if;
+
+  select case when c.type = 'individual' then k.price_retail else k.price_trade end
+    into v_price from kits k, customers c where k.id = r.kit_id and c.id = v_cust;
+
+  insert into orders (customer_id, teacher_id, notes)
+    values (v_cust, r.teacher_id, coalesce(p_note, 'from kit request #' || p_req))
+    returning id into v_order;
+
+  insert into order_lines (order_id, kit_id, student_id, kind, qty, unit_price, due_date)
+    values (v_order, r.kit_id, r.student_id, r.kind, r.qty,
+            case when r.kind = 'sale' then coalesce(v_price,0) else 0 end,
+            case when r.kind = 'loan' then coalesce(r.needed_by, current_date + 90) end);
+
+  update kit_requests
+     set status = 'done', order_id = v_order, handled_at = now(), handled_note = p_note
+   where id = p_req;
+  return v_order;
 end $$;
 
 -- mark a whole order's loans returned in one go
@@ -345,7 +449,9 @@ alter table orders       enable row level security;
 alter table order_lines  enable row level security;
 alter table kit_moves    enable row level security;
 alter table parts        enable row level security;
-alter table replacements enable row level security;
+alter table item_requests enable row level security;
+alter table kit_requests  enable row level security;
+alter table teachers      enable row level security;
 
 drop policy if exists staff_all on customers;
 create policy staff_all on customers    for all to authenticated using (true) with check (true);
@@ -361,5 +467,9 @@ drop policy if exists staff_all on kit_moves;
 create policy staff_all on kit_moves    for all to authenticated using (true) with check (true);
 drop policy if exists staff_all on parts;
 create policy staff_all on parts        for all to authenticated using (true) with check (true);
-drop policy if exists staff_all on replacements;
-create policy staff_all on replacements for all to authenticated using (true) with check (true);
+drop policy if exists staff_all on item_requests;
+create policy staff_all on item_requests for all to authenticated using (true) with check (true);
+drop policy if exists staff_all on kit_requests;
+create policy staff_all on kit_requests  for all to authenticated using (true) with check (true);
+drop policy if exists admin_all on teachers;
+create policy admin_all on teachers      for all to authenticated using (true) with check (true);

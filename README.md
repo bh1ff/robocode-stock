@@ -61,6 +61,30 @@ Cost per kit is generated from the real BOM and supplier quote by
 `1 Kit Data/build_stock_seed.py`. Re-running `seed.sql` **updates cost but never
 overwrites your prices** — set those once in Admin and they stick.
 
+## Database migration (Supabase CLI)
+
+This folder has **no git remote** — nothing pushes anywhere. Run the CLI here:
+
+```
+brew install supabase/tap/supabase     # once
+supabase login
+supabase init                          # keeps the existing supabase/functions/
+supabase link --project-ref dtggdbcortsnhqepfyem
+```
+
+`supabase link` asks for the database password. Type it at the prompt — never
+paste it into a file, a chat, or this repo.
+
+To capture the current live database as a migration:
+
+```
+supabase db pull                       # existing schema -> supabase/migrations/
+supabase db push                       # apply local migrations to the project
+```
+
+If you would rather start clean, put `schema.sql`, `kiosk.sql` and `seed.sql`
+into `supabase/migrations/` with timestamp prefixes and `db push` them.
+
 ## Security
 Only the **anon public key** is in this repo; row-level security protects the
 data and every table requires a signed-in staff user. Never commit the
