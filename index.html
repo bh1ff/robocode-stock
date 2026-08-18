@@ -54,10 +54,10 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .muted{color:var(--muted)}
 .right{margin-left:auto}
 .warnrow td{background:#fff6f5}
-#login{max-width:340px;margin:12vh auto;background:#fff;padding:26px;border-radius:12px;
+#login,#reset{max-width:340px;margin:12vh auto;background:#fff;padding:26px;border-radius:12px;
        border:1px solid var(--line)}
-#login h1{font-size:20px;margin:0 0 4px;letter-spacing:1px}
-#login h1 span{color:var(--pink)}
+#login h1,#reset h1{font-size:20px;margin:0 0 4px;letter-spacing:1px}
+#login h1 span,#reset h1 span{color:var(--pink)}
 #msg{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--dark);color:#fff;
      padding:10px 18px;border-radius:8px;font-size:13px;display:none;z-index:99;max-width:90vw}
 #msg.bad{background:var(--bad)}
@@ -72,7 +72,20 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
   <label style="margin-top:10px">Password</label>
   <input id="li_pass" type="password" style="width:100%" autocomplete="current-password">
   <button class="btn" id="li_go" style="width:100%;margin-top:16px">Sign in</button>
+  <p style="margin:12px 0 0;text-align:center">
+    <a href="#" id="li_forgot" style="font-size:12px;color:var(--muted)">Forgot password?</a></p>
   <p id="li_err" class="muted" style="font-size:12px;margin-top:12px"></p>
+</div>
+
+<div id="reset" class="hide">
+  <h1>ROBO<span>CODE</span></h1>
+  <p class="muted" style="margin:0 0 18px">Choose a new password</p>
+  <label>New password</label>
+  <input id="rs_a" type="password" style="width:100%" autocomplete="new-password">
+  <label style="margin-top:10px">Confirm</label>
+  <input id="rs_b" type="password" style="width:100%" autocomplete="new-password">
+  <button class="btn" id="rs_go" style="width:100%;margin-top:16px">Save password</button>
+  <p id="rs_err" class="muted" style="font-size:12px;margin-top:12px"></p>
 </div>
 
 <div id="app" class="hide">
@@ -280,6 +293,9 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 </main></div>
 <div id="msg"></div>
 <script>
+// Where Supabase sends people back to after a password-reset email.
+// Must also be listed in Supabase -> Authentication -> URL Configuration.
+const SITE_URL = "https://bh1ff.github.io/robocode-stock/";
 const SUPABASE_URL="https://dtggdbcortsnhqepfyem.supabase.co", SUPABASE_ANON="sb_publishable_YH9wly7qxCjwuik1vw6c4g_H851pZhg";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
@@ -318,6 +334,43 @@ $('#li_go').onclick = async () => {
 $('#li_pass').addEventListener('keydown', e => { if(e.key==='Enter') $('#li_go').click(); });
 $('#signout').onclick = async () => { await sb.auth.signOut(); location.reload(); };
 
+/* ---------- password recovery ---------- */
+$('#li_forgot').onclick = async (e) => {
+  e.preventDefault();
+  const email = ($('#li_email').value || prompt('Which email address?') || '').trim();
+  if(!email) return;
+  const {error} = await sb.auth.resetPasswordForEmail(email, {redirectTo: SITE_URL});
+  const p = $('#li_err');
+  p.textContent = error ? error.message
+    : 'If that address has an account, a reset link is on its way. The link opens ' + SITE_URL;
+  p.style.color = error ? 'var(--bad)' : 'var(--ok)';
+};
+
+// Supabase returns from the email with a recovery token in the URL fragment.
+// supabase-js consumes it and fires PASSWORD_RECOVERY.
+let recovering = false;
+sb.auth.onAuthStateChange((event) => {
+  if(event === 'PASSWORD_RECOVERY'){
+    recovering = true;
+    $('#login').classList.add('hide');
+    $('#app').classList.add('hide');
+    $('#reset').classList.remove('hide');
+  }
+});
+
+$('#rs_go').onclick = async () => {
+  const a = $('#rs_a').value, b = $('#rs_b').value, p = $('#rs_err');
+  if(a.length < 8){ p.textContent='Use at least 8 characters.'; p.style.color='var(--bad)'; return; }
+  if(a !== b)     { p.textContent='Those do not match.';        p.style.color='var(--bad)'; return; }
+  const {error} = await sb.auth.updateUser({password:a});
+  if(error){ p.textContent = error.message; p.style.color='var(--bad)'; return; }
+  history.replaceState(null,'',location.pathname);   // drop the token from the address bar
+  recovering = false;
+  $('#reset').classList.add('hide');
+  await boot();
+  toast('Password updated');
+};
+
 /* ---------- tabs ---------- */
 $$('nav button').forEach(b => b.onclick = () => {
   $$('nav button').forEach(x=>x.classList.remove('on')); b.classList.add('on');
@@ -327,6 +380,7 @@ $$('nav button').forEach(b => b.onclick = () => {
 
 /* ---------- boot ---------- */
 async function boot(){
+  if(recovering) return;                 // let the user finish setting a password first
   const {data:{session}} = await sb.auth.getSession();
   if(!session) return;
   $('#login').classList.add('hide'); $('#app').classList.remove('hide');

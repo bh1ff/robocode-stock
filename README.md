@@ -85,6 +85,22 @@ supabase db push                       # apply local migrations to the project
 If you would rather start clean, put `schema.sql`, `kiosk.sql` and `seed.sql`
 into `supabase/migrations/` with timestamp prefixes and `db push` them.
 
+## Hosting and password recovery
+
+The app is served by GitHub Pages at **https://bh1ff.github.io/robocode-stock/**
+(branch `main`, root). Pushing to `main` republishes it.
+
+Password reset emails must come back to that address, not localhost. Set it in
+**Supabase → Authentication → URL Configuration**:
+
+| Field | Value |
+|---|---|
+| Site URL | `https://bh1ff.github.io/robocode-stock/` |
+| Redirect URLs | `https://bh1ff.github.io/robocode-stock/**` |
+
+The same address is `SITE_URL` at the top of `index.html`. Change both together
+if the app ever moves.
+
 ## Security
 Only the **anon public key** is in this repo; row-level security protects the
 data and every table requires a signed-in staff user. Never commit the
