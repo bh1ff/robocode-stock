@@ -84,8 +84,10 @@ opens the customer's mail client with the subject and covering note filled in.
   name for invoices and contracts.
 
 Biller details live in the `BILLER` constant at the top of the script in
-`index.html` — address, terms and the remittance line. Add a company number or
-VAT registration there if you need them on the document.
+`index.html`. It carries both names deliberately: **RobocodeUK Ltd** is the
+brand form used in the From block, and **ROBOCODEUK LIMITED, registered in
+England and Wales, company number 17251049** runs along the footer, which is
+where UK law wants the registered name and number to appear.
 
 ### Exporting orders
 Tick orders on the **Orders** tab — the header box selects everything the

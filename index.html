@@ -805,7 +805,9 @@ $('#imp_file').onchange = async (e) => {
 /* ---------- invoices ---------- */
 // Formal document, so the legal name is used, not the public wordmark.
 const BILLER = {
-  legal:  'RobocodeUK Ltd',
+  legal:      'RobocodeUK Ltd',              // brand form, per the guidelines
+  registered: 'ROBOCODEUK LIMITED',          // the name at Companies House
+  companyNo:  '17251049',
   lines:  ['The Exchange', '26 Haslucks Green Road', 'Solihull', 'West Midlands B90 2EL',
            'United Kingdom'],
   email:  'info@robocode.uk',
@@ -1083,7 +1085,9 @@ window.makeInvoice = async (orderId) => {
 
   <div class="parties">
     <div><div class="lbl">From</div><b>${esc(BILLER.legal)}</b><br>
-      ${BILLER.lines.map(esc).join('<br>')}<br>${esc(BILLER.email)}</div>
+      ${BILLER.lines.map(esc).join('<br>')}<br>${esc(BILLER.email)}
+      <div style="margin-top:7px;font-size:10.5px;color:var(--muted)">
+        Company no. ${esc(BILLER.companyNo)}</div></div>
     <div><div class="lbl">Invoice to</div><b>${esc(o.customer)}</b>${to?'<br>'+to:''}</div>
     <div><div class="lbl">Requested by</div>${esc(o.requested_by || '—')}
       ${o.notes?`<div style="margin-top:10px"><div class="lbl">Notes</div>${esc(o.notes)}</div>`:''}</div>
@@ -1111,8 +1115,9 @@ window.makeInvoice = async (orderId) => {
   <div class="note"><b>${esc(BILLER.terms)}</b><br>${esc(BILLER.remit)}
     ${o.paid ? `<br>Settled ${dt(o.paid_at)}${o.payment_ref?' — '+esc(o.payment_ref):''}. No payment required.` : ''}</div>
 
-  <footer><span>${esc(BILLER.legal)}</span><span>${esc(inv)}</span>
-    <span>${esc(BILLER.email)}</span></footer>
+  <footer><span>${esc(BILLER.registered)} &middot; Registered in England and Wales
+      &middot; Company number ${esc(BILLER.companyNo)}</span>
+    <span>${esc(inv)}</span><span>${esc(BILLER.email)}</span></footer>
 </div></body></html>`;
 
   const w = window.open('', '_blank');
