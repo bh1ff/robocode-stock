@@ -71,22 +71,26 @@ create table if not exists kiosk_attempts (
 );
 
 -- ---------- who we deal with ----------
-create table customers (
+create table if not exists customers (
   id           bigint generated always as identity primary key,
   name         text not null,
   type         customer_type not null default 'franchise',
   contact_name text,
   email        text,
   phone        text,
-  address      text,
+  address1     text,
+  address2     text,
+  city         text,
+  postcode     text,
+  country      text default 'United Kingdom',
   notes        text,
   active       boolean default true,
   created_at   timestamptz default now(),
   unique (name, type)
 );
 
--- Proper address fields. Added after the fact, so this runs whether the table is
--- new or already live. The old single-line `address` is folded into address1.
+-- Also add them to a table that already exists from an earlier run, and fold the
+-- old single-line `address` into address1 before retiring it.
 alter table customers add column if not exists address1 text;
 alter table customers add column if not exists address2 text;
 alter table customers add column if not exists city     text;
@@ -104,7 +108,7 @@ end $$;
 
 -- students sit under a customer (a franchise, centre or school).
 -- An individual customer buying one kit needs no student row.
-create table students (
+create table if not exists students (
   id             bigint generated always as identity primary key,
   name           text not null,
   customer_id    bigint references customers(id) on delete set null,
@@ -114,10 +118,10 @@ create table students (
   active         boolean default true,
   created_at     timestamptz default now()
 );
-create index on students (customer_id);
+create index if not exists students_customer_id_idx on students (customer_id);
 
 -- ---------- what we sell ----------
-create table kits (
+create table if not exists kits (
   id            bigint generated always as identity primary key,
   code          text unique not null,          -- C1..C4, YB1..YB10
   name          text not null,
@@ -131,7 +135,7 @@ create table kits (
 );
 
 -- ---------- orders ----------
-create table orders (
+create table if not exists orders (
   id           bigint generated always as identity primary key,
   ref          text unique,                    -- filled by trigger: RC-0001
   customer_id  bigint not null references customers(id),
@@ -143,10 +147,10 @@ create table orders (
   notes        text,
   created_at   timestamptz default now()
 );
-create index on orders (customer_id);
-create index on orders (paid);
+create index if not exists orders_customer_id_idx on orders (customer_id);
+create index if not exists orders_paid_idx on orders (paid);
 
-create table order_lines (
+create table if not exists order_lines (
   id          bigint generated always as identity primary key,
   order_id    bigint not null references orders(id) on delete cascade,
   kit_id      bigint not null references kits(id),
@@ -159,14 +163,14 @@ create table order_lines (
   returned_at timestamptz,
   notes       text
 );
-create index on order_lines (order_id);
-create index on order_lines (kit_id);
-create index on order_lines (status);
+create index if not exists order_lines_order_id_idx on order_lines (order_id);
+create index if not exists order_lines_kit_id_idx on order_lines (kit_id);
+create index if not exists order_lines_status_idx on order_lines (status);
 
 -- ---------- built-kit stock ledger ----------
 -- Stock is DERIVED from this table. Never edit a stock number directly.
 -- delta is signed: +30 built, -40 sent out, +1 returned.
-create table kit_moves (
+create table if not exists kit_moves (
   id            bigint generated always as identity primary key,
   kit_id        bigint not null references kits(id),
   delta         int not null check (delta <> 0),
@@ -176,11 +180,11 @@ create table kit_moves (
   note          text,
   occurred_at   timestamptz default now()
 );
-create index on kit_moves (kit_id);
-create index on kit_moves (order_line_id);
+create index if not exists kit_moves_kit_id_idx on kit_moves (kit_id);
+create index if not exists kit_moves_order_line_id_idx on kit_moves (order_line_id);
 
 -- ---------- replacement parts log (no stock counts, just a record) ----------
-create table parts (
+create table if not exists parts (
   id       bigint generated always as identity primary key,
   urn      text unique not null,
   name     text not null,
@@ -189,7 +193,7 @@ create table parts (
 );
 
 -- a teacher asking for a part: "Amir needs a new Arduino, his is dead"
-create table item_requests (
+create table if not exists item_requests (
   id          bigint generated always as identity primary key,
   part_id     bigint references parts(id),
   student_id  bigint references students(id),
@@ -202,11 +206,11 @@ create table item_requests (
   handled_note text,
   created_at  timestamptz default now()
 );
-create index on item_requests (status);
-create index on item_requests (created_at);
+create index if not exists item_requests_status_idx on item_requests (status);
+create index if not exists item_requests_created_at_idx on item_requests (created_at);
 
 -- a teacher asking for a kit for a named child
-create table kit_requests (
+create table if not exists kit_requests (
   id          bigint generated always as identity primary key,
   kit_id      bigint not null references kits(id),
   student_id  bigint references students(id),
@@ -222,8 +226,8 @@ create table kit_requests (
   handled_note text,
   created_at  timestamptz default now()
 );
-create index on kit_requests (status);
-create index on kit_requests (created_at);
+create index if not exists kit_requests_status_idx on kit_requests (status);
+create index if not exists kit_requests_created_at_idx on kit_requests (created_at);
 
 -- ============================================================================
 -- triggers: keep the ledger honest
@@ -235,6 +239,7 @@ begin
   if new.ref is null then new.ref := 'RC-' || lpad(new.id::text, 4, '0'); end if;
   return new;
 end $$;
+drop trigger if exists t_order_ref on orders;
 create trigger t_order_ref before insert on orders
   for each row execute function _set_order_ref();
 
@@ -267,8 +272,10 @@ begin
   end if;
   return new;
 end $$;
+drop trigger if exists t_line_stock_ins on order_lines;
 create trigger t_line_stock_ins after insert on order_lines
   for each row execute function _line_stock();
+drop trigger if exists t_line_stock_upd on order_lines;
 create trigger t_line_stock_upd before update on order_lines
   for each row execute function _line_stock();
 
@@ -279,14 +286,20 @@ begin
   elsif not new.paid then new.paid_at := null; end if;
   return new;
 end $$;   -- OLD is null on INSERT, so coalesce() keeps this safe for both triggers
+drop trigger if exists t_stamp_paid on orders;
 create trigger t_stamp_paid before update on orders
   for each row execute function _stamp_paid();
+drop trigger if exists t_stamp_paid_ins on orders;
 create trigger t_stamp_paid_ins before insert on orders
   for each row execute function _stamp_paid();
 
 -- ============================================================================
 -- views: what the app actually reads
+-- Dropped first so a changed definition replaces cleanly - create or replace
+-- refuses if the column list moves.
 -- ============================================================================
+drop view if exists v_kit_stock, v_orders, v_money_owed, v_open_loans,
+                    v_customer_balance, v_kit_requests, v_item_requests cascade;
 
 -- built / out / available per kit type
 create view v_kit_stock as

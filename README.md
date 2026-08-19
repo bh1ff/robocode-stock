@@ -21,7 +21,9 @@ Run in the Supabase SQL editor, in this order:
 | 2 | `seed.sql` | the 14 kit types, their costs and the flat £30 / £40 prices |
 | 3 | `kiosk.sql` | teacher kiosk functions and teacher admin |
 
-All three are safe to re-run.
+All three are genuinely safe to re-run — every table, index, view, trigger and
+policy is guarded or dropped first, and the seed inserts use ON CONFLICT. Run
+them again whenever you pull a change; nothing duplicates and nothing errors.
 
 `schema.sql` is safe to re-run. It **renames** v1's `kits`, `students` and
 `franchises` to `*_v1` rather than dropping them, and copies the franchises and
