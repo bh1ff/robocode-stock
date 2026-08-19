@@ -2,17 +2,17 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ROBOCODE — Teacher Kiosk</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="assets/brand.css">
 <style>
-:root{--turq:#00DCDE;--dark:#003439;--pink:#FF00BF;--bg:#eef3f4;--card:#fff;
-      --line:#dbe4e6;--muted:#6a7787;--ok:#1d7d5a;--bad:#c0392b;--warn:#a06000}
 *{box-sizing:border-box}
-body{margin:0;font:16px/1.5 "Segoe UI",Helvetica,Arial,sans-serif;background:var(--bg);color:#12222a}
+body{margin:0;font:16px/1.55 var(--body);background:var(--bg);color:#12222a}
 header{background:var(--dark);color:#fff;padding:14px 20px;display:flex;align-items:center;gap:14px}
-header h1{font-size:18px;margin:0;letter-spacing:1px}header h1 span{color:var(--turq)}
+header h1{font-size:20px;margin:0;letter-spacing:1px;font-family:var(--display)}header h1 span{color:var(--turq)}
 header .who{margin-left:auto;display:flex;align-items:center;gap:12px;font-size:14px}
 main{max-width:760px;margin:0 auto;padding:20px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;margin-bottom:16px}
-h2{font-size:13px;letter-spacing:1px;text-transform:uppercase;color:var(--dark);margin:0 0 14px}
+h2{font-size:14px;letter-spacing:1.4px;text-transform:uppercase;color:var(--dark);
+   margin:0 0 14px;font-family:var(--display);font-weight:400}
 label{display:block;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
       color:var(--muted);margin:0 0 5px}
 input,select,textarea{font:inherit;width:100%;padding:13px 12px;border:2px solid var(--line);
@@ -54,7 +54,7 @@ td{padding:8px 6px;border-bottom:1px solid var(--line)}
 #done .tick{font-size:56px;color:var(--ok)}
 </style></head><body>
 
-<header><h1>ROBO<span>CODE</span> &nbsp;Teacher Kiosk</h1>
+<header><h1><img src="assets/robocode-logo-light.svg" alt="ROBOCODE" style="height:30px;vertical-align:middle;margin-right:12px">Teacher Kiosk</h1>
   <div class="who"><span id="who"></span>
     <button class="big ghost hide" id="out" style="width:auto;padding:8px 14px;font-size:13px">Finish</button></div>
 </header>

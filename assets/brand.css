@@ -1,0 +1,47 @@
+/* ROBOCODE brand tokens — from /Volumes/1TB/Marketing/branding/BRANDING.md
+   Air Force for display, Inter standing in for Myriad Pro as the guidelines allow. */
+
+@font-face{font-family:'Air Force';src:url('fonts/Air-Force.otf') format('opentype');
+           font-weight:400;font-display:swap}
+@font-face{font-family:'Inter';src:url('fonts/Inter-400.woff2') format('woff2');
+           font-weight:400;font-display:swap}
+@font-face{font-family:'Inter';src:url('fonts/Inter-600.woff2') format('woff2');
+           font-weight:600;font-display:swap}
+@font-face{font-family:'Inter';src:url('fonts/Inter-700.woff2') format('woff2');
+           font-weight:700;font-display:swap}
+
+:root{
+  /* core palette */
+  --turq:#00DCDE;  --pink:#FF00BF;  --tan:#FF9752;
+  /* turquoise ramp */
+  --t50:#EDFFFE; --t100:#C1FFFF; --t200:#83FDFF; --t300:#3EFCFF; --t400:#04E7E7;
+  --t500:#00DCDE; --t600:#00ADB3; --t700:#00888E; --t800:#006970; --t900:#05575C; --t950:#003439;
+  /* pink ramp */
+  --p50:#FFF0FD; --p300:#FF98F4; --p600:#FF00BF; --p900:#98036C; --p950:#5F003E;
+  /* tan ramp */
+  --n50:#FFF6ED; --n300:#FFB371; --n400:#FF9752; --n500:#FE6611; --n900:#7E2610;
+
+  /* roles */
+  --dark:var(--t950);          /* body text and dark surfaces */
+  --ink:#003439;
+  --bg:var(--t50);             /* Light Turquoise, an approved background */
+  --card:#FFFFFF;
+  --line:#CFE6E7;
+  --muted:#5B7377;
+  --ok:#00888E;
+  --bad:#B80080;               /* pink 800 — our "wrong" colour, not a stock red */
+  --warn:#C63508;              /* tan 700 */
+  --link:var(--t900);
+
+  --display:'Air Force','Segoe UI',Helvetica,Arial,sans-serif;
+  --body:'Inter','Myriad Pro','Segoe UI',Helvetica,Arial,sans-serif;
+}
+
+/* buttons follow the guideline fills */
+.btn-primary{background:var(--t200);color:var(--ink)}
+.btn-primary:hover{background:var(--t500)}
+.btn-secondary{background:var(--p300);color:var(--ink)}
+.btn-secondary:hover{background:var(--p600);color:#fff}
+.btn-tertiary{background:var(--n300);color:var(--ink)}
+.btn-tertiary:hover{background:var(--n500);color:#fff}
+a{color:var(--link)} a:visited{color:var(--p900)}

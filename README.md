@@ -69,6 +69,24 @@ functions, so the kiosk needs no table access at all and can only ever see
 student, kit and part *names*. Failed attempts are recorded in `kiosk_attempts`
 and 25 failures in ten minutes locks the door for a while.
 
+### Invoices
+Any order with a value has an **Invoice** button on the Orders tab, and a
+**Create invoice** button inside the order detail. It opens a branded A4 invoice
+in a new tab with two actions: **Print / Save as PDF**, and **Email**, which
+opens the customer's mail client with the subject and covering note filled in.
+
+- Numbered from the order: `RC-0007` becomes invoice `INV-0007`.
+- Dated from the order, due 30 days later.
+- Loaned kits are listed separately under *Also issued on loan — no charge*, so
+  a franchise sees what they hold without being billed for it.
+- Paid orders carry a **PAID** stamp and the settlement date.
+- Says **RobocodeUK Ltd**, not ROBOCODE. The brand guidelines reserve the legal
+  name for invoices and contracts.
+
+Biller details live in the `BILLER` constant at the top of the script in
+`index.html` — address, terms and the remittance line. Add a company number or
+VAT registration there if you need them on the document.
+
 ### Exporting orders
 Tick orders on the **Orders** tab — the header box selects everything the
 current filter shows. A bar appears with two exports:
@@ -161,6 +179,16 @@ Password reset emails must come back to that address, not localhost. Set it in
 
 The same address is `SITE_URL` at the top of `index.html`. Change both together
 if the app ever moves.
+
+## Branding
+`assets/brand.css` carries the palette and typography from
+`/Volumes/1TB/Marketing/branding/BRANDING.md` — Air Force for display, Inter
+standing in for Myriad Pro as the guidelines permit, and the full turquoise,
+pink and tan ramps as CSS variables. Both pages and the invoice use it, so a
+colour change lands everywhere at once.
+
+Fonts and the logo are bundled in `assets/` rather than pulled from a CDN, so
+the app and the printed invoice look right offline.
 
 ## Security
 Only the **anon public key** is in this repo; row-level security protects the

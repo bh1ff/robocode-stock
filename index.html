@@ -3,13 +3,12 @@
 <title>ROBOCODE — Kit Stock</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<link rel="stylesheet" href="assets/brand.css">
 <style>
-:root{--turq:#00DCDE;--dark:#003439;--pink:#FF00BF;--tan:#FF9752;
-      --bg:#f4f7f8;--card:#fff;--line:#dfe6e8;--muted:#6a7787;--ok:#1d7d5a;--bad:#c0392b;--warn:#a06000}
 *{box-sizing:border-box}
-body{margin:0;font:14px/1.45 "Segoe UI",Helvetica,Arial,sans-serif;background:var(--bg);color:#1a2230}
+body{margin:0;font:14px/1.5 var(--body);background:var(--bg);color:#1a2230}
 header{background:var(--dark);color:#fff;padding:10px 18px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
-header h1{font-size:17px;margin:0;letter-spacing:1px;font-weight:700}
+header h1{font-size:19px;margin:0;letter-spacing:1px;font-weight:400;font-family:var(--display)}
 header h1 span{color:var(--turq)}
 header .who{margin-left:auto;font-size:12px;opacity:.85;display:flex;gap:10px;align-items:center}
 nav{background:#fff;border-bottom:1px solid var(--line);display:flex;gap:2px;padding:0 10px;overflow-x:auto}
@@ -20,7 +19,8 @@ nav button .pill{background:var(--bad);color:#fff;border-radius:9px;padding:1px 
 main{padding:16px;max-width:1280px;margin:0 auto}
 .panel{display:none}.panel.on{display:block}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:14px}
-.card h2{font-size:13px;text-transform:uppercase;letter-spacing:1px;margin:0 0 12px;color:var(--dark)}
+.card h2{font-size:13px;text-transform:uppercase;letter-spacing:1.4px;margin:0 0 12px;
+         color:var(--dark);font-family:var(--display);font-weight:400}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
 label{display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
       letter-spacing:.5px;margin-bottom:3px}
@@ -67,7 +67,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 @media(max-width:640px){main{padding:10px}.card{padding:12px}}
 </style></head><body>
 <div id="login">
-  <h1>ROBO<span>CODE</span></h1>
+  <img src="assets/robocode-logo.svg" alt="ROBOCODE" style="height:34px;display:block;margin:0 auto 6px">
   <p class="muted" style="margin:0 0 18px">Kit stock &amp; orders</p>
   <label>Email</label><input id="li_email" type="email" style="width:100%" autocomplete="username">
   <label style="margin-top:10px">Password</label>
@@ -79,7 +79,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 </div>
 
 <div id="reset" class="hide">
-  <h1>ROBO<span>CODE</span></h1>
+  <img src="assets/robocode-logo.svg" alt="ROBOCODE" style="height:34px;display:block;margin:0 auto 6px">
   <p class="muted" style="margin:0 0 18px">Choose a new password</p>
   <label>New password</label>
   <input id="rs_a" type="password" style="width:100%" autocomplete="new-password">
@@ -91,7 +91,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 
 <div id="app" class="hide">
 <header>
-  <h1>ROBO<span>CODE</span> &nbsp;Kit Stock</h1>
+  <h1><img src="assets/robocode-logo-light.svg" alt="ROBOCODE" style="height:26px;vertical-align:middle;margin-right:10px">Kit Stock</h1>
   <div class="who"><span id="whoami"></span><button class="mini" id="signout">Sign out</button></div>
 </header>
 <nav>
@@ -595,6 +595,7 @@ function drawOrders(){
                         : '<span class="tag ok">No charge</span>'}</td>
     <td><button class="mini" onclick="showOrder(${o.id})">View</button>
         <button class="mini" onclick="exportOne(${o.id})">⤓ CSV</button>
+        ${o.total_due>0?`<button class="mini" onclick="makeInvoice(${o.id})">Invoice</button>`:''}
         ${o.total_due>0 ? `<button class="mini" onclick="togglePaid(${o.id},${!o.paid})">${o.paid?'Mark unpaid':'Mark paid'}</button>`:''}
     </td></tr>`).join('') || '<tr><td colspan="10" class="muted">No orders.</td></tr>';
   syncSel();
@@ -624,6 +625,7 @@ window.showOrder = async (id) => {
       <div><div class="lbl">Customer</div><b>${esc(o.customer)}</b></div>
       <div><div class="lbl">Requested by</div><b>${esc(o.requested_by||'—')}</b></div>
       <div><div class="lbl">Date</div><b>${esc(o.order_date)}</b></div>
+      <div><button class="mini" onclick="makeInvoice(${o.id})">Create invoice</button></div>
       <div><div class="lbl">Payment</div>${o.total_due>0?(o.paid?'<span class="tag paid">Paid</span>':'<span class="tag unpaid">Unpaid</span>'):'<span class="tag ok">No charge</span>'}
         ${o.payment_ref?` <span class="muted">${esc(o.payment_ref)}</span>`:''}</div>
     </div>
@@ -798,6 +800,324 @@ $('#imp_file').onchange = async (e) => {
     $('#imp_preview').classList.add('hide'); $('#imp_file').value=''; impRows=[];
     await refresh();
   };
+};
+
+/* ---------- invoices ---------- */
+// Formal document, so the legal name is used, not the public wordmark.
+const BILLER = {
+  legal:  'RobocodeUK Ltd',
+  lines:  ['The Exchange', '26 Haslucks Green Road', 'Solihull', 'West Midlands B90 2EL',
+           'United Kingdom'],
+  email:  'info@robocode.uk',
+  terms:  'Payment due within 30 days of invoice date.',
+  remit:  'Please send remittance advice to info@robocode.uk quoting the invoice number.'
+};
+const LOGO_SVG = `<svg id="Layer_2" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" viewBox="0 0 673.33 156.32">
+  
+  <defs>
+    <style>
+      .st0 {
+        fill: url(#linear-gradient2);
+      }
+
+      .st1 {
+        fill: url(#linear-gradient1);
+      }
+
+      .st2 {
+        fill: url(#linear-gradient9);
+      }
+
+      .st3 {
+        fill: url(#linear-gradient3);
+      }
+
+      .st4 {
+        fill: url(#linear-gradient6);
+      }
+
+      .st5 {
+        fill: url(#linear-gradient8);
+      }
+
+      .st6 {
+        fill: url(#linear-gradient7);
+      }
+
+      .st7 {
+        fill: url(#linear-gradient5);
+      }
+
+      .st8 {
+        fill: url(#linear-gradient);
+      }
+
+      .st9 {
+        fill: #00adb3;
+      }
+
+      .st10 {
+        opacity: .3;
+      }
+
+      .st11 {
+        fill: #ff00bf;
+      }
+
+      .st12 {
+        fill: url(#linear-gradient4);
+        isolation: isolate;
+        opacity: .2;
+      }
+    </style>
+    <linearGradient id="linear-gradient" x1="54.5" y1="808.15" x2="-4.66" y2="749" gradientTransform="translate(0 -683.89)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f931c9"/>
+      <stop offset=".1" stop-color="#eb3aca"/>
+      <stop offset=".28" stop-color="#c753cd"/>
+      <stop offset=".53" stop-color="#8c7bd2"/>
+      <stop offset=".83" stop-color="#3db1d8"/>
+      <stop offset="1" stop-color="#0ed2dd"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient1" x1="123.39" y1="799.06" x2="81.99" y2="757.67" gradientTransform="translate(0 -683.89)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f931c9"/>
+      <stop offset=".1" stop-color="#eb3aca"/>
+      <stop offset=".28" stop-color="#c753cd"/>
+      <stop offset=".53" stop-color="#8c7bd2"/>
+      <stop offset=".83" stop-color="#3db1d8"/>
+      <stop offset="1" stop-color="#0ed2dd"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient2" x1="84.15" y1="729.43" x2="74" y2="719.27" gradientTransform="translate(0 -683.89)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f931c9"/>
+      <stop offset="0" stop-color="#eb3aca"/>
+      <stop offset="0" stop-color="#c753cd"/>
+      <stop offset="0" stop-color="#8c7bd2"/>
+      <stop offset="0" stop-color="#3db1d8"/>
+      <stop offset="0" stop-color="#18cbdc"/>
+      <stop offset="1" stop-color="#0ed2dd"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient3" x1="54.22" y1="729.43" x2="44.07" y2="719.27" gradientTransform="translate(0 -683.89)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f931c9"/>
+      <stop offset="0" stop-color="#eb3aca"/>
+      <stop offset="0" stop-color="#c753cd"/>
+      <stop offset="0" stop-color="#8c7bd2"/>
+      <stop offset="0" stop-color="#3db1d8"/>
+      <stop offset="0" stop-color="#0ed2dd"/>
+      <stop offset="1" stop-color="#18cbdc"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient4" x1="87.79" y1="821.16" x2="40.3" y2="773.67" gradientTransform="translate(0 -683.89)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f931c9"/>
+      <stop offset=".1" stop-color="#eb3aca"/>
+      <stop offset=".28" stop-color="#c753cd"/>
+      <stop offset=".53" stop-color="#8c7bd2"/>
+      <stop offset=".83" stop-color="#3db1d8"/>
+      <stop offset="1" stop-color="#0ed2dd"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient5" x1="67.43" y1="810.51" x2="41.2" y2="784.28" gradientTransform="translate(0 -683.89)" gradientUnits="userSpaceOnUse">
+      <stop offset="1" stop-color="#f931c9"/>
+      <stop offset="1" stop-color="#eb3aca"/>
+      <stop offset="1" stop-color="#c753cd"/>
+      <stop offset="1" stop-color="#8c7bd2"/>
+      <stop offset="1" stop-color="#3db1d8"/>
+      <stop offset="1" stop-color="#0ed2dd"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient6" x1="87.01" y1="810.51" x2="60.79" y2="784.29" gradientTransform="translate(0 -683.89)" gradientUnits="userSpaceOnUse">
+      <stop offset="1" stop-color="#f931c9"/>
+      <stop offset="1" stop-color="#eb3aca"/>
+      <stop offset="1" stop-color="#c753cd"/>
+      <stop offset="1" stop-color="#8c7bd2"/>
+      <stop offset="1" stop-color="#3db1d8"/>
+      <stop offset="1" stop-color="#0ed2dd"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient7" x1="69.74" y1="746.17" x2="58.29" y2="734.72" gradientTransform="translate(0 -683.89)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f931c9"/>
+      <stop offset="0" stop-color="#e041cb"/>
+      <stop offset="0" stop-color="#b55fce"/>
+      <stop offset="0" stop-color="#8d7ad2"/>
+      <stop offset="0" stop-color="#6a92d5"/>
+      <stop offset="0" stop-color="#4da6d7"/>
+      <stop offset="0" stop-color="#36b6d9"/>
+      <stop offset="0" stop-color="#24c2db"/>
+      <stop offset="0" stop-color="#17cbdc"/>
+      <stop offset="0" stop-color="#10d0dc"/>
+      <stop offset="0" stop-color="#0ed2dd"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient8" x1="115.62" y1="813.81" x2="12.53" y2="710.72" gradientTransform="translate(0 -683.89)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff00bf"/>
+      <stop offset=".41" stop-color="#ab6cda"/>
+      <stop offset=".82" stop-color="#5dd3f4"/>
+      <stop offset="1" stop-color="#3efcff"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient9" x1="67.9" y1="-772.94" x2="62.24" y2="-767.28" gradientTransform="translate(0 -766.11) scale(1 -1)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f931c9"/>
+      <stop offset="0" stop-color="#eb3aca"/>
+      <stop offset="0" stop-color="#c753cd"/>
+      <stop offset="0" stop-color="#8c7bd2"/>
+      <stop offset="0" stop-color="#3db1d8"/>
+      <stop offset="0" stop-color="#0ed2dd"/>
+    </linearGradient>
+  </defs>
+  <g id="Layer_1-2">
+    <g>
+      <g>
+        <polygon class="st11" points="673.33 49.86 673.33 60.01 638.17 60.01 638.17 74.98 663.33 74.98 663.33 85.13 638.17 85.13 638.17 100.11 673.33 100.11 673.33 110.26 628.01 110.26 628.01 49.86 673.33 49.86"/>
+        <path class="st11" d="M558.79,110.26v-60.4h36.44c5.06,0,8.59,4.86,8.88,9.54.84,13.46-.65,27.77,0,41.32.11,4.6-4.19,9.54-8.88,9.54h-36.44ZM568.78,100.11h21.28c1.72,0,3.84-2.33,3.86-4.06l.03-31.48c.19-1.91-1.99-4.55-3.88-4.55h-21.28v40.1h-.01Z"/>
+        <path class="st11" d="M499.6,49.91c8.77-.82,18.62.49,27.5-.03,4.89.43,8.47,3.94,8.9,8.83v42.85c-.54,4.99-4.25,8.33-9.22,8.7-8.74-.52-18.24.67-26.88,0-4.6-.36-8.19-3.29-8.97-7.9-.56-14.32-.12-28.74-.23-43.1.44-5.17,3.63-8.86,8.9-9.35ZM525.42,60.58c-.25-.26-.85-.55-1.23-.58h-21.38c-1.12.02-1.96.85-1.98,1.98v36.16c.02,1.12.85,1.95,1.98,1.98h21.38c.99-.12,1.84-1.15,1.81-2.15l-.12-36.55c-.13-.27-.25-.62-.46-.83h0Z"/>
+        <path class="st11" d="M467.17,65h-9.91l-.26-.26v-3.44c0-.31-1.3-1.43-1.81-1.29h-21.55c-.85.06-1.41.83-1.72,1.55v37.01c.31.72.87,1.49,1.72,1.55l21.98-.08c.36,0,1.37-1.02,1.37-1.21v-3.44l.26-.26h9.91v6.28c0,4.66-4.82,8.87-9.38,8.87-8.68-.46-17.94.59-26.55,0-4.51-.31-8.07-2.94-9.13-7.4-.57-14.61-.09-29.33-.25-43.98.44-5.25,4.16-8.69,9.38-9.04,9.07-.62,19.1.3,28.22.23,3.88.52,7.72,4.72,7.72,8.64v6.28h0Z"/>
+      </g>
+      <g id="Q1celQ.tif">
+        <g>
+          <path class="st9" d="M359.75,50.94c8.88.46,18.72-.79,27.5-.03,5.62.49,8.73,4.42,9.08,9.87.85,13.27-.65,27.43,0,40.79-.39,5.54-3.73,9.33-9.38,9.73-8.69.62-18.12-.48-26.88,0-4.96-.46-8.66-3.8-9.06-8.85l.03-43.01c.56-4.73,4-8.03,8.73-8.49h-.02ZM361.57,100.57c.27.27.84.55,1.23.58h21.38c1.12-.02,1.96-.85,1.98-1.98v-36.16c-.02-1.12-.85-1.95-1.98-1.98h-21.38c-.76.09-1.35.6-1.67,1.26l-.06,37.47c.16.24.3.6.5.8h0Z"/>
+          <path class="st9" d="M281.79,111.3v-60.4h36.44c3.06,0,6.67,2.61,7.92,5.34,1.41,3.05,1.17,12.43.96,16.1-.17,2.98-1.08,6.12-3.85,7.69-.84.48-1.86.62-2.7,1.08,0,.13,2.13.79,2.47.97,2.93,1.5,3.9,4.72,4.08,7.8.21,3.7.46,13.14-1.01,16.22-1.27,2.66-4.87,5.22-7.87,5.22h-36.44v-.02h0ZM291.96,76.02h21.11c.9,0,2.48-1.07,3.02-1.81,1.48-2.01,1.5-9.22.08-11.26-.47-.67-2.13-1.9-2.92-1.9h-21.28v14.97h0ZM291.96,101.14h21.28c.79,0,2.45-1.23,2.92-1.9,1.43-2.04,1.41-9.25-.08-11.26-.54-.73-2.11-1.81-3.02-1.81h-21.11v14.97h0Z"/>
+          <path class="st9" d="M222.22,50.94c8.9.44,18.69-.77,27.5-.03,5.49.46,8.73,4.35,9.08,9.69.85,13.38-.65,27.66,0,41.14-.39,5.48-3.84,9.16-9.38,9.56-8.69.62-18.12-.48-26.88,0-4.95-.4-8.61-3.9-9.06-8.85l.03-43.01c.57-4.69,4.04-8.03,8.73-8.49h-.02,0ZM224.97,61.08c-.85.37-1.53,1.14-1.51,2.11v35.81c-.03,1.01.82,2.03,1.81,2.15h21.38c1.13-.02,1.96-.86,1.98-1.97v-36.16c-.04-1.08-.75-1.85-1.81-1.97l-21.85.04h0Z"/>
+          <path class="st9" d="M181.38,50.89c4.83.49,8.34,4.27,8.7,9.04.35,4.69.35,12.35,0,17.04-.42,5.87-4.76,9.27-10.52,9.2l8.44,25.12h-9.99l-8.44-25.13h-14.65v25.13h-10.17v-60.4h36.63ZM154.93,76.02h23.52c.84,0,1.57-1.38,1.65-2.14.34-3.47-.26-7.48-.02-11.01.02-.5-1.06-1.82-1.45-1.82h-23.69v14.97h0Z"/>
+        </g>
+      </g>
+      <g>
+        <g>
+          <g class="st10">
+            <path class="st8" d="M23.51,115.06c.06-1.32.21-2.61.45-3.86-4.79-7.36-7.58-16.13-7.58-25.55s2.58-17.51,7.03-24.69v-1.46c-.87-1.53-1.61-3.19-2.19-4.99-.68-2.09-.96-4.29-.89-6.51h-7.88C4.63,58.53,0,71.56,0,85.65c0,25.14,14.71,46.9,35.98,57.13-1.13-1.6-2.21-3.23-3.27-4.87-5.8-6.23-9.56-14.51-9.2-22.86h0Z"/>
+            <path class="st1" d="M114.28,48h-6.51c-.24,4.35-1.66,8.29-3.94,11.59v2.22c4.13,6.99,6.52,15.14,6.52,23.83,0,7.78-1.9,15.11-5.26,21.58,1.2,6.01.24,12.38-2.43,17.94-2.68,6.31-5.98,11.66-10.49,16.89,20.5-10.51,34.57-31.84,34.57-56.41,0-14.09-4.63-27.12-12.44-37.65h-.02,0Z"/>
+          </g>
+          <g>
+            <rect class="st0" x="75.39" y="33.19" width="7.37" height="14.54" rx="1.37" ry="1.37"/>
+            <rect class="st3" x="45.46" y="33.19" width="7.37" height="14.54" rx="1.37" ry="1.37"/>
+          </g>
+          <path class="st12" d="M96.12,116.14l-12.13,24.53c-.81,1.63-2.3,2.64-3.91,2.64h-32.08c-1.61,0-3.11-1.01-3.91-2.64l-12.13-24.53c-.81-1.63-.81-3.64,0-5.27l12.08-24.42c.84-1.7,2.4-2.75,4.08-2.75h31.86c1.68,0,3.24,1.05,4.08,2.75l12.08,24.42c.81,1.63.81,3.64,0,5.27h-.02Z"/>
+          <path class="st7" d="M50.87,90.86l-11.17,21.69c-.31.59-.31,1.33,0,1.92l11.17,21.69c.31.59.87.96,1.48.96h3.93c1.32,0,2.14-1.6,1.48-2.88l-10.18-19.77c-.31-.59-.31-1.33,0-1.92l10.18-19.77c.66-1.28-.16-2.88-1.48-2.88h-3.93c-.61,0-1.18.37-1.48.96Z"/>
+          <path class="st4" d="M70.46,92.78l10.17,19.77c.31.59.31,1.33,0,1.92l-10.17,19.77c-.66,1.28.17,2.88,1.48,2.88h3.92c.61,0,1.18-.37,1.48-.96l11.17-21.69c.31-.59.31-1.33,0-1.92l-11.17-21.69c-.31-.59-.87-.96-1.48-.96h-3.92c-1.32,0-2.14,1.6-1.48,2.88Z"/>
+          <path class="st6" d="M71.42,54.33c-6.03,3.65-11.54,1.75-14.87-.25-.61-.37-1.4-.21-1.84.35-.3.38-.61.75-.93,1.11-.6.66-.48,1.71.28,2.18,2.57,1.57,6.22,3.16,10.44,3.16,2.94,0,6.16-.78,9.47-2.88.73-.46.84-1.47.28-2.13-.33-.38-.65-.78-.95-1.18-.44-.6-1.26-.75-1.89-.36h0Z"/>
+        </g>
+        <path class="st5" d="M115.85,44.09c-4.3-.94-7.54-4.78-7.54-9.36v-12.75c0-3.35-2.71-6.06-6.06-6.06h-29.93c-2.64,0-6.07-2.14-6.07-4.78v-3.84h-2.54v3.84c0,2.64-3.69,4.78-6.33,4.78h-31.42c-3.35,0-6.06,2.71-6.06,6.06v12.75c0,4.58-3.23,8.42-7.54,9.36-1.2.26-2.04,1.36-2.04,2.59v2.63c0,1.23.84,2.33,2.04,2.59,4.3.94,7.54,4.78,7.54,9.36v12.75c0,3.35,2.71,6.06,6.06,6.06h7.6l-15.5,31.2c-1.16,2.01-1.16,4.48,0,6.48l17.89,35.33c1.16,2.01,3.3,3.24,5.61,3.24h44.98c2.32,0,4.46-1.24,5.61-3.24l17.89-35.33c1.16-2.01,1.16-4.48,0-6.48l-15.5-31.2h7.7c3.35,0,6.06-2.71,6.06-6.06v-12.75c0-4.58,3.23-8.42,7.54-9.36,1.2-.26,2.04-1.36,2.04-2.59v-2.63c0-1.23-.84-2.33-2.04-2.59,0,0,.01,0,.01,0ZM101.88,111.84c.95,1.65.95,3.68,0,5.33l-14.3,29.13c-.95,1.65-2.71,2.66-4.61,2.66h-37.81c-1.9,0-3.66-1.02-4.61-2.66l-14.3-29.13c-.95-1.65-.95-3.68,0-5.33l15.84-31.79h43.96l15.84,31.79h0ZM100.95,61.25v8.87c0,1.42-1.15,2.57-2.57,2.57H29.84c-1.42,0-2.57-1.15-2.57-2.57v-8.87c0-5.37-2.52-10.16-6.43-13.26,3.91-3.11,6.43-7.89,6.43-13.26v-8.87c0-1.42,1.15-2.57,2.57-2.57h68.54c1.42,0,2.57,1.15,2.57,2.57v8.87c0,5.37,2.52,10.16,6.43,13.26-3.91,3.11-6.43,7.89-6.43,13.26Z"/>
+        <path class="st2" d="M65.07,0h0c2.21,0,4,1.79,4,4h0c0,2.21-1.79,4-4,4h0c-2.21,0-4-1.79-4-4h0c0-2.21,1.79-4,4-4Z"/>
+      </g>
+    </g>
+  </g>
+</svg>`;
+
+window.makeInvoice = async (orderId) => {
+  const o = ORDERS.find(x => x.id === orderId);
+  if(!o) return toast('Order not found', true);
+
+  const [{data:lines, error}, {data:cust}] = await Promise.all([
+    sb.from('order_lines')
+      .select('kind,qty,unit_price,due_date,status,kits(code,name),students(name)')
+      .eq('order_id', orderId),
+    sb.from('customers').select('*').eq('id', o.customer_id).single()
+  ]);
+  if(error) return toast(error.message, true);
+
+  const sales = (lines||[]).filter(l => l.kind === 'sale');
+  const loans = (lines||[]).filter(l => l.kind === 'loan');
+  const total = sales.reduce((a,l) => a + l.qty * Number(l.unit_price||0), 0);
+  const inv   = 'INV-' + String(o.ref || o.id).replace(/^RC-/, '');
+  const money = n => '£' + Number(n||0).toFixed(2);
+  const dt    = d => d ? new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}) : '';
+  const due   = new Date(o.order_date); due.setDate(due.getDate() + 30);
+
+  const to = [cust?.contact_name, cust?.address, cust?.email, cust?.phone]
+             .filter(Boolean).map(esc).join('<br>');
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>${esc(inv)} ${esc(o.customer)}</title>
+<link rel="stylesheet" href="assets/brand.css">
+<style>
+  @page{size:A4;margin:16mm}
+  *{box-sizing:border-box}
+  body{font-family:var(--body);color:var(--ink);margin:0;background:#eef3f4;font-size:12.5px;line-height:1.5}
+  .sheet{width:210mm;min-height:297mm;margin:14px auto;background:#fff;padding:16mm;
+         position:relative;display:flex;flex-direction:column}
+  .top{display:flex;justify-content:space-between;align-items:flex-start;gap:24px}
+  .top svg{height:42px;width:auto}
+  h1{font-family:var(--display);font-weight:400;font-size:34px;margin:0;letter-spacing:2px;color:var(--t950)}
+  .meta{text-align:right;font-size:12px}
+  .meta b{display:inline-block;min-width:96px;color:var(--muted);font-weight:600}
+  .rule{height:4px;background:var(--turq);margin:16px 0 22px;border-radius:2px}
+  .parties{display:flex;gap:34px;margin-bottom:24px}
+  .parties>div{flex:1}
+  .lbl{font-family:var(--display);font-size:11px;letter-spacing:1.4px;text-transform:uppercase;
+       color:var(--t700);margin-bottom:6px}
+  table{width:100%;border-collapse:collapse;margin-top:6px}
+  th{font-family:var(--display);font-weight:400;font-size:10.5px;letter-spacing:1px;text-transform:uppercase;
+     text-align:left;padding:9px 8px;background:var(--t950);color:#fff}
+  th.r,td.r{text-align:right}
+  td{padding:9px 8px;border-bottom:1px solid var(--line)}
+  tr:nth-child(even) td{background:var(--t50)}
+  .totals{margin-top:16px;margin-left:auto;width:270px}
+  .totals div{display:flex;justify-content:space-between;padding:7px 8px}
+  .totals .grand{background:var(--t950);color:#fff;font-weight:700;font-size:16px;border-radius:6px;
+                 font-family:var(--display)}
+  .note{margin-top:26px;margin-bottom:22px;padding:14px 16px;background:var(--n50);
+        border-left:4px solid var(--tan);font-size:12px}
+  .loans{margin-top:26px}
+  .loans td{background:#fff!important}
+  .paid{position:absolute;top:120px;right:26mm;border:5px solid var(--ok);color:var(--ok);
+        font-family:var(--display);font-size:38px;letter-spacing:5px;padding:6px 22px;
+        transform:rotate(-14deg);opacity:.85;border-radius:8px}
+  footer{margin-top:auto;padding-top:10px;border-top:1px solid var(--line);
+         font-size:10.5px;color:var(--muted);display:flex;justify-content:space-between}
+  .bar{max-width:210mm;margin:14px auto 0;display:flex;gap:10px}
+  .bar button,.bar a{font-family:var(--body);font-size:14px;font-weight:600;padding:11px 18px;border:0;
+        border-radius:8px;background:var(--t950);color:#fff;cursor:pointer;text-decoration:none}
+  .bar .alt{background:#fff;color:var(--t950);border:1px solid var(--line)}
+  @media print{body{background:#fff}.sheet{margin:0;width:auto;min-height:0;padding:0}.bar{display:none}}
+</style></head><body>
+<div class="bar">
+  <button onclick="window.print()">Print / Save as PDF</button>
+  <a class="alt" href="mailto:${encodeURIComponent(cust?.email||'')}?subject=${
+      encodeURIComponent(BILLER.legal+' invoice '+inv)}&body=${
+      encodeURIComponent('Hello'+(cust?.contact_name?' '+cust.contact_name:'')+
+      ',\n\nPlease find invoice '+inv+' for '+money(total)+' attached.\n\n'+BILLER.remit+
+      '\n\nMany thanks,\nRobocodeUK Ltd\ninfo@robocode.uk')}">Email ${esc(cust?.email||'customer')}</a>
+</div>
+<div class="sheet">
+  <div class="top"><div>${LOGO_SVG}</div>
+    <div><h1>INVOICE</h1>
+      <div class="meta" style="margin-top:10px">
+        <div><b>Invoice no</b> ${esc(inv)}</div>
+        <div><b>Order ref</b> ${esc(o.ref)}</div>
+        <div><b>Date</b> ${dt(o.order_date)}</div>
+        <div><b>Due</b> ${dt(due)}</div>
+      </div></div></div>
+  <div class="rule"></div>
+  ${o.paid ? '<div class="paid">PAID</div>' : ''}
+
+  <div class="parties">
+    <div><div class="lbl">From</div><b>${esc(BILLER.legal)}</b><br>
+      ${BILLER.lines.map(esc).join('<br>')}<br>${esc(BILLER.email)}</div>
+    <div><div class="lbl">Invoice to</div><b>${esc(o.customer)}</b>${to?'<br>'+to:''}</div>
+    <div><div class="lbl">Requested by</div>${esc(o.requested_by || '—')}
+      ${o.notes?`<div style="margin-top:10px"><div class="lbl">Notes</div>${esc(o.notes)}</div>`:''}</div>
+  </div>
+
+  ${sales.length ? `<table><thead><tr><th>Kit</th><th>Student</th><th class="r">Qty</th>
+    <th class="r">Unit</th><th class="r">Amount</th></tr></thead><tbody>
+    ${sales.map(l=>`<tr><td><b>${esc(l.kits.code)}</b> ${esc(l.kits.name)}</td>
+      <td>${esc(l.students?.name||'—')}</td><td class="r">${l.qty}</td>
+      <td class="r">${money(l.unit_price)}</td>
+      <td class="r">${money(l.qty*l.unit_price)}</td></tr>`).join('')}
+    </tbody></table>
+    <div class="totals"><div><span>Subtotal</span><span>${money(total)}</span></div>
+      <div class="grand"><span>Total due</span><span>${money(total)}</span></div></div>`
+   : '<p class="muted">No chargeable items on this order.</p>'}
+
+  ${loans.length ? `<div class="loans"><div class="lbl">Also issued on loan — no charge</div>
+    <table><thead><tr><th>Kit</th><th>Student</th><th class="r">Qty</th><th>Due back</th>
+      <th>Status</th></tr></thead><tbody>
+      ${loans.map(l=>`<tr><td><b>${esc(l.kits.code)}</b> ${esc(l.kits.name)}</td>
+        <td>${esc(l.students?.name||'—')}</td><td class="r">${l.qty}</td>
+        <td>${esc(l.due_date||'—')}</td><td>${esc(l.status)}</td></tr>`).join('')}
+    </tbody></table></div>` : ''}
+
+  <div class="note"><b>${esc(BILLER.terms)}</b><br>${esc(BILLER.remit)}
+    ${o.paid ? `<br>Settled ${dt(o.paid_at)}${o.payment_ref?' — '+esc(o.payment_ref):''}. No payment required.` : ''}</div>
+
+  <footer><span>${esc(BILLER.legal)}</span><span>${esc(inv)}</span>
+    <span>${esc(BILLER.email)}</span></footer>
+</div></body></html>`;
+
+  const w = window.open('', '_blank');
+  if(!w) return toast('Allow pop-ups to open the invoice', true);
+  w.document.write(html); w.document.close();
 };
 
 /* ---------- select + CSV export ---------- */
