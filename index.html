@@ -182,7 +182,15 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
       <input id="f_search" placeholder="customer, ref or teacher" style="width:100%"></div>
   </div></div>
   <div class="card">
+    <div id="selbar" class="row hide" style="margin-bottom:12px;padding:10px 12px;
+         background:#e0f7f8;border:1px solid var(--turq);border-radius:8px">
+      <b id="selcount" style="color:var(--dark)"></b>
+      <button class="mini" id="ex_sum">⤓ Export summary</button>
+      <button class="mini" id="ex_det">⤓ Export line detail</button>
+      <button class="mini right" id="ex_clear">Clear selection</button>
+    </div>
     <table><thead><tr>
+      <th style="width:26px"><input type="checkbox" id="sel_all" title="Select all shown"></th>
       <th>Ref</th><th>Date</th><th>Customer</th><th>Requested by</th>
       <th class="num">Sold</th><th class="num">Loaned</th><th class="num">Due</th>
       <th>Payment</th><th></th>
@@ -576,6 +584,7 @@ function filteredOrders(){
 function drawOrders(){
   const rows = filteredOrders();
   $('#t_orders').innerHTML = rows.map(o=>`<tr>
+    <td><input type="checkbox" class="selbox" data-id="${o.id}"${SEL.has(o.id)?' checked':''}></td>
     <td><b>${esc(o.ref)}</b></td><td>${esc(o.order_date)}</td>
     <td>${esc(o.customer)} <span class="tag ok">${esc(o.customer_type)}</span></td>
     <td>${esc(o.requested_by||'—')}</td>
@@ -585,8 +594,10 @@ function drawOrders(){
     <td>${o.total_due>0 ? (o.paid?'<span class="tag paid">Paid</span>':'<span class="tag unpaid">Unpaid</span>')
                         : '<span class="tag ok">No charge</span>'}</td>
     <td><button class="mini" onclick="showOrder(${o.id})">View</button>
+        <button class="mini" onclick="exportOne(${o.id})">⤓ CSV</button>
         ${o.total_due>0 ? `<button class="mini" onclick="togglePaid(${o.id},${!o.paid})">${o.paid?'Mark unpaid':'Mark paid'}</button>`:''}
-    </td></tr>`).join('') || '<tr><td colspan="9" class="muted">No orders.</td></tr>';
+    </td></tr>`).join('') || '<tr><td colspan="10" class="muted">No orders.</td></tr>';
+  syncSel();
 }
 $('#f_orders').onchange = drawOrders;
 $('#f_search').oninput  = drawOrders;
@@ -787,6 +798,100 @@ $('#imp_file').onchange = async (e) => {
     $('#imp_preview').classList.add('hide'); $('#imp_file').value=''; impRows=[];
     await refresh();
   };
+};
+
+/* ---------- select + CSV export ---------- */
+const SEL = new Set();
+
+function syncSel(){
+  const shown = filteredOrders().map(o=>o.id);
+  // drop anything no longer visible under the current filter
+  [...SEL].forEach(id => { if(!shown.includes(id)) SEL.delete(id); });
+  const n = SEL.size;
+  $('#selbar').classList.toggle('hide', !n);
+  $('#selcount').textContent = `${n} order${n===1?'':'s'} selected`;
+  const all = $('#sel_all');
+  all.checked = n > 0 && n === shown.length;
+  all.indeterminate = n > 0 && n < shown.length;
+}
+document.addEventListener('change', e => {
+  if(e.target.classList && e.target.classList.contains('selbox')){
+    const id = +e.target.dataset.id;
+    e.target.checked ? SEL.add(id) : SEL.delete(id);
+    syncSel();
+  }
+});
+$('#sel_all').onchange = (e) => {
+  const shown = filteredOrders().map(o=>o.id);
+  SEL.clear(); if(e.target.checked) shown.forEach(id=>SEL.add(id));
+  drawOrders();
+};
+$('#ex_clear').onclick = () => { SEL.clear(); drawOrders(); };
+
+/* CSV helpers -------------------------------------------------------------- */
+const csvCell = v => {
+  const s = v === null || v === undefined ? '' : String(v);
+  return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+};
+const toCSV = (head, rows) =>
+  [head, ...rows].map(r => r.map(csvCell).join(',')).join('\r\n');
+
+function download(name, csv){
+  // BOM so Excel reads the £ signs as UTF-8
+  const blob = new Blob(['\uFEFF' + csv], {type:'text/csv;charset=utf-8;'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 0);
+}
+const stamp = () => new Date().toISOString().slice(0,10);
+
+/* one row per order -------------------------------------------------------- */
+function exportSummary(ids){
+  const head = ['Ref','Date','Customer','Customer type','Requested by','Kits sold',
+                'Kits loaned','Loans still out','Amount due','Paid','Paid on','Payment ref','Notes'];
+  const rows = ORDERS.filter(o=>ids.includes(o.id)).map(o=>[
+    o.ref, o.order_date, o.customer, o.customer_type, o.requested_by||'',
+    o.kits_sold, o.kits_loaned, o.loans_open,
+    Number(o.total_due||0).toFixed(2),
+    o.total_due>0 ? (o.paid?'Yes':'No') : 'n/a',
+    o.paid_at ? String(o.paid_at).slice(0,10) : '', o.payment_ref||'', o.notes||'']);
+  if(!rows.length) return toast('Nothing to export', true);
+  download(`ROBOCODE orders ${stamp()}.csv`, toCSV(head, rows));
+  toast(`Exported ${rows.length} order${rows.length===1?'':'s'}`);
+}
+
+/* one row per kit on the order -------------------------------------------- */
+async function exportDetail(ids, filename){
+  const {data, error} = await sb.from('order_lines')
+    .select('order_id,kind,qty,unit_price,due_date,status,returned_at,notes,'
+          + 'kits(code,name),students(name)')
+    .in('order_id', ids);
+  if(error) return toast(error.message, true);
+  const byOrder = Object.fromEntries(ORDERS.map(o=>[o.id,o]));
+  const head = ['Ref','Date','Customer','Customer type','Requested by','Kit code','Kit',
+                'Student','Sale or loan','Qty','Unit price','Line total','Due back',
+                'Status','Returned','Order paid','Payment ref'];
+  const rows = (data||[])
+    .sort((a,b)=> (byOrder[a.order_id]?.ref||'').localeCompare(byOrder[b.order_id]?.ref||''))
+    .map(l => { const o = byOrder[l.order_id] || {};
+      return [o.ref, o.order_date, o.customer, o.customer_type, o.requested_by||'',
+              l.kits?.code, l.kits?.name, l.students?.name||'', l.kind, l.qty,
+              Number(l.unit_price||0).toFixed(2),
+              (l.qty * Number(l.unit_price||0)).toFixed(2),
+              l.due_date||'', l.status,
+              l.returned_at ? String(l.returned_at).slice(0,10) : '',
+              o.total_due>0 ? (o.paid?'Yes':'No') : 'n/a', o.payment_ref||''];});
+  if(!rows.length) return toast('Those orders have no lines', true);
+  download(filename || `ROBOCODE order lines ${stamp()}.csv`, toCSV(head, rows));
+  toast(`Exported ${rows.length} line${rows.length===1?'':'s'}`);
+}
+
+$('#ex_sum').onclick = () => exportSummary([...SEL]);
+$('#ex_det').onclick = () => exportDetail([...SEL]);
+window.exportOne = (id) => {
+  const o = ORDERS.find(x=>x.id===id);
+  exportDetail([id], `ROBOCODE ${o ? o.ref : id} ${o ? o.customer : ''}.csv`.replace(/\s+/g,' ').trim());
 };
 
 /* ---------- requests ---------- */

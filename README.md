@@ -69,6 +69,25 @@ functions, so the kiosk needs no table access at all and can only ever see
 student, kit and part *names*. Failed attempts are recorded in `kiosk_attempts`
 and 25 failures in ten minutes locks the door for a while.
 
+### Exporting orders
+Tick orders on the **Orders** tab — the header box selects everything the
+current filter shows. A bar appears with two exports:
+
+- **Summary** — one row per order: ref, date, customer, teacher, kits sold and
+  loaned, loans still out, amount due, paid, payment reference, notes.
+- **Line detail** — one row per kit: everything above plus kit code, student,
+  sale or loan, quantity, unit price, line total, due-back date, status and
+  return date. This is the one to send a franchise or hand to accounts.
+
+Every row also has its own **⤓ CSV** button, which exports that order's lines as
+`ROBOCODE RC-0007 Shirley.csv`.
+
+Selection survives re-sorting and clears itself if you change the filter so that
+an order is no longer visible — you can never export something you cannot see.
+Files carry a UTF-8 BOM so Excel renders the £ signs properly, and fields are
+escaped to RFC 4180, so commas, quotes and line breaks in notes or names cannot
+break the columns.
+
 ### Requests
 Teacher requests land on the admin **Requests** tab with a count badge.
 A kit request shows current stock and warns if there is not enough. **Make
