@@ -247,19 +247,35 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
     <div id="imp_preview" class="hide" style="margin-top:14px"></div>
   </div>
 
-  <div class="card"><h2>Add one customer</h2><div class="row">
-    <div style="min-width:180px"><label>Name</label><input id="c_name" style="width:100%"></div>
-    <div><label>Type</label><select id="c_type">
-      <option value="franchise">Franchise</option><option value="centre">Our centre</option>
-      <option value="school">School</option><option value="individual">Individual</option></select></div>
-    <div><label>Contact</label><input id="c_contact"></div>
-    <div><label>Email</label><input id="c_email" type="email"></div>
-    <div><label>Phone</label><input id="c_phone"></div>
-    <button class="btn" id="c_go">Add</button>
-  </div></div>
+  <div class="card"><h2 id="c_title">Add one customer</h2>
+    <div class="row">
+      <div style="min-width:170px"><label>Name</label><input id="c_name" style="width:100%"></div>
+      <div><label>Type</label><select id="c_type">
+        <option value="franchise">Franchise</option><option value="centre">Our centre</option>
+        <option value="school">School</option><option value="individual">Individual</option></select></div>
+      <div><label>Contact</label><input id="c_contact"></div>
+      <div><label>Email</label><input id="c_email" type="email"></div>
+      <div><label>Phone</label><input id="c_phone"></div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <div style="min-width:200px"><label>Address line 1</label><input id="c_a1" style="width:100%"></div>
+      <div style="min-width:170px"><label>Address line 2</label><input id="c_a2" style="width:100%"></div>
+      <div><label>Town / city</label><input id="c_city"></div>
+      <div><label>Postcode</label><input id="c_post" style="width:110px;text-transform:uppercase"></div>
+      <div><label>Country</label><input id="c_country" value="United Kingdom"></div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <p class="muted" style="font-size:12px;margin:0">
+        A franchise appears on invoices as <b>Robocode</b> + its name, so enter just
+        <b>Shirley</b>, not "Robocode Shirley". The address here is what prints on the invoice.</p>
+      <button class="btn alt right hide" id="c_cancel">Cancel</button>
+      <button class="btn" id="c_go">Add customer</button>
+    </div>
+  </div>
   <div class="card"><h2>Customers</h2>
-    <table><thead><tr><th>Name</th><th>Type</th><th>Contact</th><th>Email</th><th>Phone</th>
-      <th class="num">Owed</th><th class="num">Loans out</th></tr></thead><tbody id="t_cust"></tbody></table>
+    <table><thead><tr><th>Name</th><th>Type</th><th>Contact</th><th>Address</th><th>Email</th>
+      <th class="num">Owed</th><th class="num">Loans</th><th></th></tr></thead>
+      <tbody id="t_cust"></tbody></table>
   </div>
   <div class="card"><h2>Add student</h2><div class="row">
     <div style="min-width:180px"><label>Name</label><input id="st_name" style="width:100%"></div>
@@ -339,6 +355,14 @@ const $  = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
   ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// A franchise trades as Robocode <place>. Stored as just the place, shown with the prefix.
+const custLabel = (name, type) => {
+  const n = String(name||'').trim();
+  return (type === 'franchise' && !/^robocode\b/i.test(n)) ? 'Robocode ' + n : n;
+};
+const addrLines = c => [c.address1, c.address2, c.city, c.postcode,
+                        (c.country && c.country !== 'United Kingdom') ? c.country : null]
+                       .filter(x => x && String(x).trim());
 const gbp = n => '£' + (Number(n)||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
 const today = () => new Date().toISOString().slice(0,10);
 let msgT;
@@ -480,9 +504,9 @@ $('#b_go').onclick = async () => {
 /* ---------- pickers ---------- */
 function drawPickers(){
   $('#b_kit').innerHTML   = opts(KITS.map(k=>({id:k.id,l:`${k.code} — ${k.name}`})),'id','l');
-  $('#o_cust').innerHTML  = opts(CUST.map(c=>({id:c.id,l:`${c.name} (${c.type})`})),'id','l','Choose customer…');
+  $('#o_cust').innerHTML  = opts(CUST.map(c=>({id:c.id,l:custLabel(c.name,c.type)})),'id','l','Choose customer…');
   $('#o_teacher').innerHTML = opts(TEACH.filter(t=>t.active),'id','name','—');
-  $('#st_cust').innerHTML = opts(CUST,'id','name','—');
+  $('#st_cust').innerHTML = opts(CUST.map(c=>({id:c.id,l:custLabel(c.name,c.type)})),'id','l','—');
 }
 
 /* ---------- order builder ---------- */
@@ -586,7 +610,7 @@ function drawOrders(){
   $('#t_orders').innerHTML = rows.map(o=>`<tr>
     <td><input type="checkbox" class="selbox" data-id="${o.id}"${SEL.has(o.id)?' checked':''}></td>
     <td><b>${esc(o.ref)}</b></td><td>${esc(o.order_date)}</td>
-    <td>${esc(o.customer)} <span class="tag ok">${esc(o.customer_type)}</span></td>
+    <td>${esc(custLabel(o.customer,o.customer_type))} <span class="tag ok">${esc(o.customer_type)}</span></td>
     <td>${esc(o.requested_by||'—')}</td>
     <td class="num">${o.kits_sold}</td>
     <td class="num">${o.kits_loaned}${o.loans_open?` <span class="tag loan">${o.loans_open} out</span>`:''}</td>
@@ -622,7 +646,7 @@ window.showOrder = async (id) => {
   $('#d_detail').innerHTML = `
     <div class="row" style="margin-bottom:12px">
       <div><div class="lbl">Reference</div><b>${esc(o.ref)}</b></div>
-      <div><div class="lbl">Customer</div><b>${esc(o.customer)}</b></div>
+      <div><div class="lbl">Customer</div><b>${esc(custLabel(o.customer,o.customer_type))}</b></div>
       <div><div class="lbl">Requested by</div><b>${esc(o.requested_by||'—')}</b></div>
       <div><div class="lbl">Date</div><b>${esc(o.order_date)}</b></div>
       <div><button class="mini" onclick="makeInvoice(${o.id})">Create invoice</button></div>
@@ -663,14 +687,14 @@ function drawMoney(){
   $('#m_count').textContent = unpaid.length;
   $('#t_money').innerHTML = unpaid.map(o=>`<tr>
     <td><b>${esc(o.ref)}</b></td><td>${esc(o.order_date)}</td>
-    <td>${esc(o.customer)}</td><td>${esc(o.requested_by||'—')}</td>
+    <td>${esc(custLabel(o.customer,o.customer_type))}</td><td>${esc(o.requested_by||'—')}</td>
     <td class="num"><b>${gbp(o.total_due)}</b></td>
     <td><button class="mini" onclick="togglePaid(${o.id},true)">Mark paid</button>
         <button class="mini" onclick="showOrder(${o.id})">View</button></td></tr>`).join('')
     || '<tr><td colspan="6" class="muted">Nothing outstanding.</td></tr>';
 
   $('#t_balance').innerHTML = BAL.filter(b=>b.orders>0).map(b=>`<tr>
-    <td>${esc(b.name)}</td><td><span class="tag ok">${esc(b.type)}</span></td>
+    <td>${esc(custLabel(b.name,b.type))}</td><td><span class="tag ok">${esc(b.type)}</span></td>
     <td class="num">${b.orders}</td>
     <td class="num"${b.owed>0?' style="color:var(--bad);font-weight:700"':''}>${gbp(b.owed)}</td>
     <td class="num muted">${gbp(b.lifetime_value)}</td>
@@ -698,26 +722,64 @@ function drawLoans(){
 function drawPeople(){
   $('#t_cust').innerHTML = CUST.map(c=>{
     const b = BAL.find(x=>x.id===c.id) || {};
-    return `<tr><td><b>${esc(c.name)}</b></td><td><span class="tag ok">${esc(c.type)}</span></td>
-    <td>${esc(c.contact_name||'—')}</td><td>${esc(c.email||'—')}</td><td>${esc(c.phone||'—')}</td>
+    const a = addrLines(c);
+    return `<tr><td><b>${esc(custLabel(c.name,c.type))}</b></td>
+    <td><span class="tag ok">${esc(c.type)}</span></td>
+    <td>${esc(c.contact_name||'—')}</td>
+    <td class="muted" style="font-size:12px">${a.length?a.map(esc).join(', '):'<i>no address</i>'}</td>
+    <td>${esc(c.email||'—')}</td>
     <td class="num"${b.owed>0?' style="color:var(--bad);font-weight:700"':''}>${gbp(b.owed||0)}</td>
-    <td class="num">${b.loans_open||0}</td></tr>`;}).join('')
-    || '<tr><td colspan="7" class="muted">No customers yet.</td></tr>';
+    <td class="num">${b.loans_open||0}</td>
+    <td><button class="mini" onclick="editCust(${c.id})">Edit</button></td></tr>`;}).join('')
+    || '<tr><td colspan="8" class="muted">No customers yet.</td></tr>';
 
   const outBy = {}; LOANS.forEach(l=>{ if(l.student) outBy[l.student]=(outBy[l.student]||0)+Number(l.qty); });
   $('#t_students').innerHTML = STUD.map(s=>{
     const c = CUST.find(x=>x.id===s.customer_id);
-    return `<tr><td>${esc(s.name)}</td><td>${esc(c?.name||'—')}</td><td>${esc(s.current_course||'—')}</td>
+    return `<tr><td>${esc(s.name)}</td><td>${esc(c?custLabel(c.name,c.type):'—')}</td><td>${esc(s.current_course||'—')}</td>
     <td>${esc(s.parent_contact||'—')}</td><td class="num">${outBy[s.name]||0}</td></tr>`;}).join('')
     || '<tr><td colspan="5" class="muted">No students yet.</td></tr>';
 }
+const C_FIELDS = ['#c_name','#c_contact','#c_email','#c_phone','#c_a1','#c_a2','#c_city','#c_post'];
+let editingCust = null;
+
+function custForm(c){
+  editingCust = c ? c.id : null;
+  $('#c_title').textContent = c ? `Edit ${custLabel(c.name,c.type)}` : 'Add one customer';
+  $('#c_go').textContent    = c ? 'Save changes' : 'Add customer';
+  $('#c_cancel').classList.toggle('hide', !c);
+  $('#c_name').value    = c?.name || '';
+  $('#c_type').value    = c?.type || 'franchise';
+  $('#c_contact').value = c?.contact_name || '';
+  $('#c_email').value   = c?.email || '';
+  $('#c_phone').value   = c?.phone || '';
+  $('#c_a1').value      = c?.address1 || '';
+  $('#c_a2').value      = c?.address2 || '';
+  $('#c_city').value    = c?.city || '';
+  $('#c_post').value    = c?.postcode || '';
+  $('#c_country').value = c?.country || 'United Kingdom';
+  if(c) $('#c_title').scrollIntoView({behavior:'smooth', block:'center'});
+}
+window.editCust = (id) => custForm(CUST.find(c=>c.id===id));
+$('#c_cancel').onclick = () => custForm(null);
+
 $('#c_go').onclick = async () => {
-  const name=$('#c_name').value.trim(); if(!name) return toast('Name required', true);
-  const {error} = await sb.from('customers').insert({name, type:$('#c_type').value,
-    contact_name:$('#c_contact').value||null, email:$('#c_email').value||null, phone:$('#c_phone').value||null});
+  const name = $('#c_name').value.trim();
+  if(!name) return toast('Name required', true);
+  const row = {name, type:$('#c_type').value,
+    contact_name:$('#c_contact').value.trim()||null, email:$('#c_email').value.trim()||null,
+    phone:$('#c_phone').value.trim()||null,
+    address1:$('#c_a1').value.trim()||null, address2:$('#c_a2').value.trim()||null,
+    city:$('#c_city').value.trim()||null,
+    postcode:$('#c_post').value.trim().toUpperCase()||null,
+    country:$('#c_country').value.trim()||null};
+  const {error} = editingCust
+    ? await sb.from('customers').update(row).eq('id', editingCust)
+    : await sb.from('customers').insert(row);
   if(error) return toast(error.message, true);
-  ['#c_name','#c_contact','#c_email','#c_phone'].forEach(i=>$(i).value='');
-  toast('Customer added'); refresh();
+  toast(editingCust ? 'Customer updated' : 'Customer added');
+  custForm(null); C_FIELDS.forEach(i=>$(i).value='');
+  refresh();
 };
 $('#st_go').onclick = async () => {
   const name=$('#st_name').value.trim(); if(!name) return toast('Name required', true);
@@ -729,7 +791,8 @@ $('#st_go').onclick = async () => {
 };
 
 /* ---------- bulk import ---------- */
-const IMP_COLS = ['name','type','contact_name','email','phone','address','notes'];
+const IMP_COLS = ['name','type','contact_name','email','phone',
+                  'address1','address2','city','postcode','country','notes'];
 const IMP_TYPES = ['franchise','centre','school','individual'];
 let impRows = [];
 
@@ -766,7 +829,9 @@ $('#imp_file').onchange = async (e) => {
     seen.add(key);
     impRows.push({row: hi+2+n, err,
       data:{name, type, contact_name:get('contact_name')||null, email:get('email')||null,
-            phone:get('phone')||null, address:get('address')||null, notes:get('notes')||null}});
+            phone:get('phone')||null, address1:get('address1')||null, address2:get('address2')||null,
+            city:get('city')||null, postcode:get('postcode').toUpperCase()||null,
+            country:get('country')||'United Kingdom', notes:get('notes')||null}});
   });
 
   if(!impRows.length){ $('#imp_preview').classList.add('hide'); return toast('No rows found in that file', true); }
@@ -779,10 +844,11 @@ $('#imp_file').onchange = async (e) => {
         <div class="big" style="${bad.length?'color:var(--bad)':''}">${bad.length}</div></div>
       <button class="btn right" id="imp_go"${good.length?'':' disabled'}>Add ${good.length} customer${good.length===1?'':'s'}</button>
     </div>
-    <table><thead><tr><th>Row</th><th>Name</th><th>Type</th><th>Contact</th><th>Email</th><th>Status</th>
+    <table><thead><tr><th>Row</th><th>Name</th><th>Type</th><th>Contact</th><th>Address</th><th>Status</th>
       </tr></thead><tbody>${impRows.slice(0,200).map(r=>`<tr${r.err?' class="warnrow"':''}>
       <td class="muted">${r.row}</td><td><b>${esc(r.data.name)}</b></td><td>${esc(r.data.type||'—')}</td>
-      <td>${esc(r.data.contact_name||'—')}</td><td>${esc(r.data.email||'—')}</td>
+      <td>${esc(r.data.contact_name||'—')}</td>
+      <td class="muted" style="font-size:12px">${esc([r.data.address1,r.data.city,r.data.postcode].filter(Boolean).join(', ')||'—')}</td>
       <td>${r.err?`<span class="tag unpaid">${esc(r.err)}</span>`:'<span class="tag paid">ok</span>'}</td>
       </tr>`).join('')}</tbody></table>
     ${impRows.length>200?`<p class="muted" style="font-size:12px">Showing the first 200 of ${impRows.length} rows.</p>`:''}`;
@@ -1016,11 +1082,12 @@ window.makeInvoice = async (orderId) => {
   const dt    = d => d ? new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}) : '';
   const due   = new Date(o.order_date); due.setDate(due.getDate() + 30);
 
-  const to = [cust?.contact_name, cust?.address, cust?.email, cust?.phone]
+  const billName = custLabel(o.customer, o.customer_type);
+  const to = [cust?.contact_name, ...addrLines(cust||{}), cust?.email, cust?.phone]
              .filter(Boolean).map(esc).join('<br>');
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-<title>${esc(inv)} ${esc(o.customer)}</title>
+<title>${esc(inv)} ${esc(billName)}</title>
 <link rel="stylesheet" href="assets/brand.css">
 <style>
   @page{size:A4;margin:16mm}
@@ -1088,7 +1155,7 @@ window.makeInvoice = async (orderId) => {
       ${BILLER.lines.map(esc).join('<br>')}<br>${esc(BILLER.email)}
       <div style="margin-top:7px;font-size:10.5px;color:var(--muted)">
         Company no. ${esc(BILLER.companyNo)}</div></div>
-    <div><div class="lbl">Invoice to</div><b>${esc(o.customer)}</b>${to?'<br>'+to:''}</div>
+    <div><div class="lbl">Invoice to</div><b>${esc(billName)}</b>${to?'<br>'+to:''}</div>
     <div><div class="lbl">Requested by</div>${esc(o.requested_by || '—')}
       ${o.notes?`<div style="margin-top:10px"><div class="lbl">Notes</div>${esc(o.notes)}</div>`:''}</div>
   </div>
@@ -1176,7 +1243,7 @@ function exportSummary(ids){
   const head = ['Ref','Date','Customer','Customer type','Requested by','Kits sold',
                 'Kits loaned','Loans still out','Amount due','Paid','Paid on','Payment ref','Notes'];
   const rows = ORDERS.filter(o=>ids.includes(o.id)).map(o=>[
-    o.ref, o.order_date, o.customer, o.customer_type, o.requested_by||'',
+    o.ref, o.order_date, custLabel(o.customer,o.customer_type), o.customer_type, o.requested_by||'',
     o.kits_sold, o.kits_loaned, o.loans_open,
     Number(o.total_due||0).toFixed(2),
     o.total_due>0 ? (o.paid?'Yes':'No') : 'n/a',
@@ -1200,7 +1267,7 @@ async function exportDetail(ids, filename){
   const rows = (data||[])
     .sort((a,b)=> (byOrder[a.order_id]?.ref||'').localeCompare(byOrder[b.order_id]?.ref||''))
     .map(l => { const o = byOrder[l.order_id] || {};
-      return [o.ref, o.order_date, o.customer, o.customer_type, o.requested_by||'',
+      return [o.ref, o.order_date, custLabel(o.customer,o.customer_type), o.customer_type, o.requested_by||'',
               l.kits?.code, l.kits?.name, l.students?.name||'', l.kind, l.qty,
               Number(l.unit_price||0).toFixed(2),
               (l.qty * Number(l.unit_price||0)).toFixed(2),
@@ -1216,7 +1283,7 @@ $('#ex_sum').onclick = () => exportSummary([...SEL]);
 $('#ex_det').onclick = () => exportDetail([...SEL]);
 window.exportOne = (id) => {
   const o = ORDERS.find(x=>x.id===id);
-  exportDetail([id], `ROBOCODE ${o ? o.ref : id} ${o ? o.customer : ''}.csv`.replace(/\s+/g,' ').trim());
+  exportDetail([id], `ROBOCODE ${o ? o.ref : id} ${o ? custLabel(o.customer,o.customer_type) : ''}.csv`.replace(/\s+/g,' ').trim());
 };
 
 /* ---------- requests ---------- */

@@ -85,6 +85,23 @@ create table customers (
   unique (name, type)
 );
 
+-- Proper address fields. Added after the fact, so this runs whether the table is
+-- new or already live. The old single-line `address` is folded into address1.
+alter table customers add column if not exists address1 text;
+alter table customers add column if not exists address2 text;
+alter table customers add column if not exists city     text;
+alter table customers add column if not exists postcode text;
+alter table customers add column if not exists country  text default 'United Kingdom';
+
+do $$ begin
+  if exists (select 1 from information_schema.columns
+              where table_schema='public' and table_name='customers' and column_name='address') then
+    update customers set address1 = address
+      where address is not null and btrim(address) <> '' and address1 is null;
+    alter table customers drop column address;
+  end if;
+end $$;
+
 -- students sit under a customer (a franchise, centre or school).
 -- An individual customer buying one kit needs no student row.
 create table students (

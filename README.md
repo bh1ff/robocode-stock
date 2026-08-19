@@ -69,6 +69,18 @@ functions, so the kiosk needs no table access at all and can only ever see
 student, kit and part *names*. Failed attempts are recorded in `kiosk_attempts`
 and 25 failures in ten minutes locks the door for a while.
 
+### Franchise naming
+A franchise is stored under its place name — **Shirley**, not "Robocode Shirley".
+The app and every invoice add the prefix, so it reads **Robocode Shirley**
+throughout. Schools and individuals are shown exactly as entered. If a name
+already starts with "Robocode" the prefix is not doubled up.
+
+### Customer addresses
+Customers carry `address1`, `address2`, `city`, `postcode` and `country`. Fill
+them in on the Customers tab — every row has an **Edit** button that loads it
+back into the form — or bulk-load them from the Excel template. The address is
+what appears in the *Invoice to* block.
+
 ### Invoices
 Any order with a value has an **Invoice** button on the Orders tab, and a
 **Create invoice** button inside the order detail. It opens a branded A4 invoice
@@ -154,7 +166,8 @@ Customers tab → **Download Excel template** → fill it in → upload it back.
 
 `templates/customers.xlsx` has the headers, a dropdown on `type`, and a second
 sheet of worked examples that is never imported. Only **name** and **type** are
-required; type must be franchise, centre, school or individual.
+required, but the address columns are what print on an invoice, so fill them in.
+Type must be franchise, centre, school or individual.
 
 The app previews every row before anything is written, flagging bad types,
 names already on the list, and duplicates inside the file itself. Because
