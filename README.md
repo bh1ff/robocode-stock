@@ -90,7 +90,8 @@ in a new tab with two actions: **Print / Save as PDF**, and **Email**, which
 opens the customer's mail client with the subject and covering note filled in.
 
 - Numbered from the order: `RC-0007` becomes invoice `INV-0007`.
-- Dated from the order, due 30 days later.
+- Dated from the order, due 14 days later. Change `termDays` in the `BILLER`
+  constant to alter it; the wording and the due date both follow it.
 - Loaned kits are listed separately under *Also issued on loan — no charge*, so
   a franchise sees what they hold without being billed for it.
 - Paid orders carry a **PAID** stamp and the settlement date.

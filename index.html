@@ -877,9 +877,10 @@ const BILLER = {
   lines:  ['The Exchange', '26 Haslucks Green Road', 'Solihull', 'West Midlands B90 2EL',
            'United Kingdom'],
   email:  'info@robocode.uk',
-  terms:  'Payment due within 30 days of invoice date.',
+  termDays: 14,
   remit:  'Please send remittance advice to info@robocode.uk quoting the invoice number.'
 };
+BILLER.terms = `Payment due within ${BILLER.termDays} days of invoice date.`;
 const LOGO_SVG = `<svg id="Layer_2" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" viewBox="0 0 673.33 156.32">
   
   <defs>
@@ -1080,7 +1081,7 @@ window.makeInvoice = async (orderId) => {
   const inv   = 'INV-' + String(o.ref || o.id).replace(/^RC-/, '');
   const money = n => '£' + Number(n||0).toFixed(2);
   const dt    = d => d ? new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}) : '';
-  const due   = new Date(o.order_date); due.setDate(due.getDate() + 30);
+  const due   = new Date(o.order_date); due.setDate(due.getDate() + BILLER.termDays);
 
   const billName = custLabel(o.customer, o.customer_type);
   const to = [cust?.contact_name, ...addrLines(cust||{}), cust?.email, cust?.phone]
