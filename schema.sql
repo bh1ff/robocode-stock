@@ -479,6 +479,7 @@ alter table orders       enable row level security;
 alter table order_lines  enable row level security;
 alter table kit_moves    enable row level security;
 alter table parts        enable row level security;
+alter table kiosk_attempts enable row level security;
 alter table item_requests enable row level security;
 alter table kit_requests  enable row level security;
 alter table teachers      enable row level security;
@@ -497,9 +498,25 @@ drop policy if exists staff_all on kit_moves;
 create policy staff_all on kit_moves    for all to authenticated using (true) with check (true);
 drop policy if exists staff_all on parts;
 create policy staff_all on parts        for all to authenticated using (true) with check (true);
+drop policy if exists staff_all on kiosk_attempts;
+create policy staff_all on kiosk_attempts for all to authenticated using (true) with check (true);
 drop policy if exists staff_all on item_requests;
 create policy staff_all on item_requests for all to authenticated using (true) with check (true);
 drop policy if exists staff_all on kit_requests;
 create policy staff_all on kit_requests  for all to authenticated using (true) with check (true);
 drop policy if exists admin_all on teachers;
 create policy admin_all on teachers      for all to authenticated using (true) with check (true);
+
+-- ---------- guard: nothing in public may be left without RLS ----------
+-- The kiosk writes through SECURITY DEFINER functions, so it is unaffected.
+do $$
+declare bad text;
+begin
+  select string_agg(c.relname, ', ' order by c.relname) into bad
+    from pg_class c join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity;
+  if bad is not null then
+    raise exception 'These tables have no row level security: %. Fix before going live.', bad;
+  end if;
+  raise notice 'RLS check passed - every table in public is protected.';
+end $$;

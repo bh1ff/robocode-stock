@@ -147,7 +147,7 @@ This folder has **no git remote** — nothing pushes anywhere. Run the CLI here:
 brew install supabase/tap/supabase     # once
 supabase login
 supabase init                          # keeps the existing supabase/functions/
-supabase link --project-ref dtggdbcortsnhqepfyem
+supabase link --project-ref khbbhdsocxxwjolokntg
 ```
 
 `supabase link` asks for the database password. Type it at the prompt — never
@@ -228,6 +228,17 @@ After any migration:
 4. Recreate the staff login. Auth users do not come across with a schema dump.
 
 ## Security
+
+`schema.sql` ends with a guard that fails loudly if any table in `public` is
+left without row level security, so the gap that Supabase flagged in August 2026
+— `kiosk_attempts` created but never protected — cannot ship again.
+
+Note the two layers. RLS decides which *rows* a role can see; the PostgREST
+grants decide whether the role can touch the table at all. `rls-fix.sql` sets
+both: policies on, and `anon` revoked from every table. The kiosk still works
+because its functions are SECURITY DEFINER and need no table access.
+
+
 Only the **anon public key** is in this repo; row-level security protects the
 data and every table requires a signed-in staff user. Never commit the
 service-role key or the database password.
