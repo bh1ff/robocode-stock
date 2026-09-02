@@ -208,6 +208,25 @@ colour change lands everywhere at once.
 Fonts and the logo are bundled in `assets/` rather than pulled from a CDN, so
 the app and the printed invoice look right offline.
 
+## If you migrate the project
+
+Moving to a new Supabase project carries the tables and the data, but **the RLS
+enabled flags and the policies are easily lost**, which leaves every table
+readable and writable by anyone holding the publishable key — and that key is
+public by design. Supabase's advisor will email you about it.
+
+After any migration:
+
+1. Run **`rls-fix.sql`** on the new project. It turns RLS on for every table in
+   `public`, applies the staff-only policy, sets `security_invoker` on the views
+   so they cannot leak round the side, strips direct `anon` grants, and puts back
+   only the kiosk function grants. It ends with a report — every table should
+   read `rls_enabled = true` with at least one policy.
+2. Update `SUPABASE_URL` and `SUPABASE_ANON` at the top of the script in **both**
+   `index.html` and `kiosk.html` to the new project's URL and publishable key.
+3. Set the Site URL and Redirect URLs again (see below) — they do not migrate.
+4. Recreate the staff login. Auth users do not come across with a schema dump.
+
 ## Security
 Only the **anon public key** is in this repo; row-level security protects the
 data and every table requires a signed-in staff user. Never commit the
